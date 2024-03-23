@@ -1,0 +1,32 @@
+Package: censusprofiler
+Type: Package
+Title: censusprofiler
+Version: 0.2
+Date: 2024-3-23
+Author: RW Stevenson
+Maintainer: RW Stevenson <thebobstevenson@protonmail.com>
+Imports: httr,tidyr,dplyr, tidycensus, sf, stringr, tigris, units, tmap, tmaptools,officer,flextable,formattable,jsonlite,paletteer,tibble,purrr,ggplot2,data.table
+Depends: R (>= 3.5.0)
+Description: Package censusprofiler works with US census data utilizing package tidycensus. These functions provide tidy output and mapping of data, including filtering and radius options, allowing for cleaner analysis of raw data provided. It is designed primarily with the ACS in mind, though it can and should be modified to work with decennial and PUMS data.
+License: GPL (>= 2)
+RoxygenNote: 7.3.1
+Encoding: UTF-8
+Collate: 
+    'capi.R'
+    'load_data.R'
+    'map_locations.R'
+    'mapper.R'
+    'profile_helper.R'
+    'profiler.R'
+    'theme_censusprofiler.R'
+    'tabler.R'
+    'utility_data.R'
+    'utility_geo.R'
+Suggests: 
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+URL: https://github.com/rws-r/censusprofiler
+BugReports: https://github.com/rws-r/censusprofiler/issues

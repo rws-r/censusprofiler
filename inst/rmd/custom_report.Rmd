@@ -1,0 +1,63 @@
+---
+title: "Church Demographic Profile"
+#output: hrbrthemes::ipsum_pdf
+output: pdf_document
+latex_engine: xelatex
+params:
+  mapSize: "75%"
+  mapAlign: "left"
+  radius: "one"
+  year: 2021
+  rowNum: 1
+  df: vbc
+  placeOfBirth: FALSE
+  placeOfBirthFilter: 0
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,  dev = "cairo_pdf")
+library(hrbrthemes)
+library(ggplot2)
+library(Cairo)
+library(extrafont)
+extrafont::loadfonts()
+set_flextable_defaults(
+    font.size = 9, theme_fun = theme_vanilla,
+    padding = 0,
+    background.color = "#FFFFFF",
+    fonts_ignore=TRUE)
+
+# TODO Add better comparisons. Specifically on housing expenses/values.
+# TODO Develop a poverty index of sorts, to better quantify the pressure of poverty on a community. Interesting vars (B19080,B19081,B25095,C17002)
+# TODO Capture variables on speaking languages and origins. (B05006)
+```
+This data draws on an approximately 5 mile radius from Village Baptist Church.
+
+# Overview of Race by Asian-Alone
+```{r Race by Asian Alone, message=FALSE, dev="cairo_pdf"}
+displayTable(params$df,varBase = "B02015",pdf=TRUE,usCompare = FALSE,dataRowNum = 1,summaryLevels = 2)
+```
+
+# Place of Birth by Foreign-Born
+The United States is a nation of immigrants. As such, it can be useful to understand where the foreign-born population in your community is located.
+
+```{r Place of Birth Table:Foreign Born, message=FALSE, dev="cairo_pdf"}
+displayTable(params$df,varBase = "B05006",pdf=TRUE,usCompare = FALSE,dataRowNum = 1,summaryLevels = 2,pctFilter = 0.005)
+```
+
+We are particularly interested in seeing where people live who were born in Vietnam. 
+```{r Place of Birth Map:Foreign Born, message=FALSE, dev="cairo_pdf"}
+  map_census_data(geography="tract",
+                dataset = params$df$data[[params$rowNum]]$df,
+                year=2021,
+                coords = params$df$churchInfo[params$rowNum,],
+                varBase = "B05006",
+                varNum = params$placeOfBirthFilter,
+                varSummaryNum = 1,
+                radiusAreaOnly = FALSE, 
+                filterRadius=5,
+                MapTitle = "",
+                LegendTitle = "",
+                interactive = FALSE,
+                dispPerc = FALSE)
+```

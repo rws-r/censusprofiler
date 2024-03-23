@@ -1,0 +1,40 @@
+---
+title: "Church Demographic Profile"
+#output: hrbrthemes::ipsum_pdf
+output: pdf_document
+latex_engine: xelatex
+params:
+  mapSize: "75%"
+  mapAlign: "left"
+  radius: "one"
+  year: 2021
+  rowNum: 1
+  df: vbc
+  geosObject: geos
+  profileList: profileList
+  profileVars: profileVars
+  placeOfBirth: FALSE
+  placeOfBirthFilter: 0
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,  dev = "cairo_pdf")
+
+set_flextable_defaults(
+    font.size = 9, theme_fun = theme_vanilla,
+    padding = 0,
+    background.color = "#FFFFFF",
+    fonts_ignore=TRUE)
+
+# TODO Add better comparisons. Specifically on housing expenses/values.
+# TODO Develop a poverty index of sorts, to better quantify the pressure of poverty on a community. Interesting vars (B19080,B19081,B25095,C17002)
+# TODO Capture variables on speaking languages and origins. (B05006)
+```
+Hello world. 
+```{r}
+displayTable(params$df,varBase="B01001",profileList = params$profileList,profileVars = params$profileVars,year=2021)
+```
+```{r}
+map_census_data("B02001",varNum = 2,varSummaryNum = 1,year=2021,dataset = params$df,geography="tract",coords = params$df$churchInfo,filterRadius = 1)
+```
+

@@ -1,0 +1,613 @@
+---
+title: "Church Demographic Profile"
+#output: hrbrthemes::ipsum_pdf
+output: pdf_document
+latex_engine: xelatex
+params:
+  mapSize: "75%"
+  mapAlign: "left"
+  radius: "one"
+  year: 2021
+  # df: !expr readRDS("test/village.RDS")
+  # geosObject: !expr readRDS("test/geos.RDS")
+  # tableID: !expr readRDS("test/profile_tableID.RDS")
+  # variables: !expr readRDS("test/profile_variables.RDS")
+  # placeOfBirth: FALSE
+  # placeOfBirthFilter: 0
+  # usCompare: !expr readRDS("test/usCompare.RDS")
+  # stateCompare: !expr readRDS("test/statesCompare.RDS") 
+  # stat_table: !expr readRDS("test/stat_table.RDS")
+  # ACS: !expr readRDS("test/ACS.RDS")
+  df: vbc
+  geosObject: geos
+  tableID: tableID
+  variables: variables
+  placeOfBirth: FALSE
+  placeOfBirthFilter: 0
+  usCompare: var
+  stateCompare: var
+  stat_table: var
+  ACS: var
+  test: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,  dev = "cairo_pdf")
+require(hrbrthemes)
+require(ggplot2)
+require(Cairo)
+require(extrafont)
+library(dplyr)
+library(sf)
+library(tmap)
+library(flextable)
+extrafont::loadfonts()
+set_flextable_defaults(
+    font.size = 9, theme_fun = theme_vanilla,
+    padding = 0,
+    background.color = "#FFFFFF",
+    fonts_ignore=TRUE)
+
+# TODO Add better comparisons. Specifically on housing expenses/values.
+# TODO Develop a poverty index of sorts, to better quantify the pressure of poverty on a community. Interesting vars (B19080,B19081,B25095,C17002)
+# TODO Capture variables on speaking languages and origins. (B05006)
+```
+
+```{r Data init,message=FALSE,results=FALSE}
+## Data init
+if(params$test==FALSE){
+  df <- params$df
+  geosObject <- params$geosObject
+  tableID <- params$tableID
+  variables <- params$variables
+  placeOfBirth <- params$placeOfBirth
+  placeOfBirthFilter <- params$placeOfBirthFilter
+  usCompare <- params$usCompare
+  stateCompare <- params$stateCompare
+  stat_table <- params$stat_table
+  ACS <- params$ACS
+}else{
+  path <- "~/DATA/censusprofileR/inst/rmd/test/"
+  df <- readRDS(paste(path,"type_5_data",".RDS",sep=""))
+  geosObject <- readRDS(paste(path,"geos",".RDS",sep=""))
+  tableID <- readRDS(paste(path,"profile_tableID",".RDS",sep=""))
+  variables <- readRDS(paste(path,"profile_variables",".RDS",sep=""))
+  usCompare <- readRDS(paste(path,"usCompare",".RDS",sep=""))
+  stateCompare <- readRDS(paste(path,"stateCompare",".RDS",sep=""))
+  stat_table <- readRDS(paste(path,"stat_table",".RDS",sep=""))
+  ACS <- readRDS(paste(path,"ACS",".RDS",sep=""))
+}
+  
+ACS.VARS <- ACS[[1]]
+ACS.TABLES <- ACS[[2]]
+
+markers <- geo_marker_builder(dispRoads = TRUE,dispWater = TRUE,dispPlaces = TRUE,dispRails = FALSE,ggrObject = df$info)
+```
+
+### Report for: **`r df$info$name`**
+
+## Introduction and Methodology
+
+This profile utilizes US Census data taken from the `r params$year` American Community Survey (ACS). The ACS conducts sample surveys each year between the decennial censuses to provide estimates about demographics.
+
+The census utilizes several geographic regions. The regions used for this report are known as "census tracts." This report in particular was created by querying census tracts within a rough `r params$radius` mile radius of `r df$info$name`. All estimates provided in the following report are drawn from these tracts.
+
+```{r Selected Tracts Map, dev = "cairo_pdf",results=FALSE,message=FALSE,out.height=params$mapSize,out.width=params$mapSize,fig.align=params$mapAlign}
+
+mapper(geography="tract",
+       year=2021,
+       coords = df$info$coordinates,
+       areaOnly = TRUE,
+       filterRadius=1,
+       MapTitle = "",
+       LegendTitle = "",
+       geosObject = geosObject,
+       varsObject = ACS,
+       markers = markers,
+       verbose=TRUE)
+```
+
+The values presented in this report are estimates, subject to margin of error. For a more detailed discussion of estimates, as well as a catalog of variables used in this report, see Appendix 1, at the back of this document.
+
+Some tables contain a reference column, comparing estimates from the selected area around `r df$info$name` with national or state proportions. This may be helpful in noting where the selected area stands out incomparison to national and state averages.
+
+# Section 1: Basic Demography
+
+Section 1 captures several basic demographic variables, revealing the social makeup of the selected area.
+
+## Race and Ethnicity
+
+Measuring race and ethnicity is notoriously difficult, due to the socially-constructed and fluid nature of race, along with multiple-race self-reports. To accomodate for this, the US Census Bureau utilizes two different metrics for measuring race and ethnicity. The first describes race using one of seven descriptors: "White alone", "Asian alone", "Black or African American alone", "American Indian and Alaska Native alone", "Native Hawaiian and Other Pacific Islander alone", "Some other race alone", and "Two or more races." Because Hispanic or Latin\@ is frequently applied across these categories, a second table captures Hispanic/Non-Hispanic across each of the first table.
+
+Both tables are presented below.
+
+```{r Race Table Broad Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       variables=variables,
+       year=2021,
+       tableID = "B02001",
+       pdf=TRUE,
+       varsObject = ACS,
+       usCompare = usCompare)
+```
+
+```{r Race Table Broad Table: Stat Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B02001",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS,
+            typeFilter = 2
+)
+```
+
+```{r Race Table Hispanic Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B03002",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = usCompare)
+```
+
+```{r  Race Table Hispanic Table: Stat Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B03002",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS,
+            typeFilter = "level_1"
+)
+```
+
+Why does this matter? The United States is a diverse country, and racial diversity is differently distributed throughout states, counties and even neighborhoods. Better understanding the community in which `r df$churchInfo[params$rowNum,]$Church.Name` is located may help to create a greater sensitivity to the ways in which the church may more effectively engage their neighbors.
+
+## Household Types
+
+Household types tells us something about the makeup of families in your community. Specifically, whether householders are married, cohabitating or single, and whether they have children living with them in the home.
+
+```{r Household Types Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B11012",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = usCompare)
+```
+
+```{r Household Types Table: Stat Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B11012",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS,
+            typeFilter = "summary"
+)
+```
+
+Many churches have programs for children, and may be interested to know where the highest density of families with children live.
+
+```{r Families With Children Map, dev = "cairo_pdf",results=FALSE,message=FALSE,out.height=params$mapSize,out.width=params$mapSize,fig.align=params$mapAlign}
+mapper(geography="tract",
+       mapDF = df,
+       year=2021,
+       coords = df$info$coordinates,
+       tableID = "B11012",
+       variable = 3,
+       variableSummary = 1,
+       areaOnly = FALSE, 
+       filterRadius=1,MapTitle = "",
+       LegendTitle = "",
+       interactive = FALSE,
+       dispPerc = TRUE,
+       varsObject = ACS,,
+       geosObject = geosObject,
+       markers = markers)
+```
+
+What about single mothers with children?
+
+```{r Single Mothers with Children Map, dev = "cairo_pdf",results=FALSE,message=FALSE,out.height=params$mapSize,out.width=params$mapSize,fig.align=params$mapAlign}
+mapper(geography="tract",
+       mapDF = df,
+       year=2021,
+       coords = df$info$coordinates,
+       tableID = "B11012",
+       variable = 10,
+       variableSummary = 1,
+       areaOnly = FALSE, 
+       filterRadius=1,MapTitle = "",
+       LegendTitle = "",
+       interactive = FALSE,
+       dispPerc = TRUE,
+       varsObject = ACS,
+       geosObject = geosObject,
+       markers = markers)
+```
+
+# Section 2: Socioeconomic Factors
+
+## Income
+
+The economic outlay of a community is captured by several factors. Positively, we can examine household income levels, per capita income levels, and home values. Negatively, we can examine proportions of households at or under poverty level.
+
+First, we can look at the distribution of household income in this area.
+
+```{r Household Income Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B19001",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = usCompare)
+```
+
+```{r Household Income Table: Stat Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B19001",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS
+            )
+```
+
+Another way to visualize this is to examine the per-capita income for your area. This number is calculated by taking the aggregate income for a population and dividing the total number by every adult and child in that population. We'll visualize this graphically by examining individual census tracts:
+
+```{r Per Capita Income Map, dev = "cairo_pdf",results=FALSE,message=FALSE,out.height=params$mapSize,out.width=params$mapSize,fig.align=params$mapAlign}
+mapper(geography="tract",
+       mapDF = df,
+       year=2021,
+       coords = df$info$coordinates,
+       tableID = "B19301",
+       variable = 1,
+       #variableSummary = 1,
+       areaOnly = FALSE, 
+       filterRadius=1,MapTitle = "",
+       LegendTitle = "",
+       interactive = FALSE,
+       dispPerc = FALSE,
+       varsObject = ACS,
+       geosObject = geosObject,
+       markers = markers)
+```
+
+An intermediate measure of wealth / poverty is the ratio of rent to income. This doesn't tell us much about the absolute value of any single measure, but it does reveal something about the level of pressure on a community via housing costs.
+
+```{r Ratio of Rent to Income Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B25070",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = usCompare)
+```
+
+```{r Ratio of Rent to Income Table: Stat Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B25070",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,            
+            ACS.VARS = ACS.VARS
+)
+```
+
+## Poverty
+
+What about the other side of the socioeconomic landscape? Looking at poverty status, we can get a sense for proportions of those who live with the most need in our communities.
+
+```{r Poverty Status Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B17001",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = usCompare
+)
+```
+
+```{r Poverty Status Table: Stat Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B17001",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS
+)
+```
+
+Poverty tends to cluster geographically, as housing values and taxes act as a barrier for those who are under-resourced.
+
+```{r Poverty Status Map, dev = "cairo_pdf",results=FALSE,message=FALSE,out.height=params$mapSize,out.width=params$mapSize,fig.align=params$mapAlign}
+mapper(geography="tract",
+       mapDF = df,
+       year=2021,
+       coords = df$info$coordinates,
+       tableID = "B17001",
+       variable = 2,
+       variableSummary = 1,
+       areaOnly = FALSE, 
+       filterRadius=1,MapTitle = "",
+       LegendTitle = "",
+       interactive = FALSE,
+       dispPerc = TRUE,
+       varsObject = ACS,
+       geosObject = geosObject,
+       markers = markers)
+```
+
+It's important to note that the poverty line is extremely low in terms of real-world purchasing power. You can find more information at [census.gov](https://www.census.gov/topics/income-poverty/poverty/guidance/poverty-measures.html). Other measures, such as recipients of food stamps can help to provide a slightly more accurate picture of real-world need.
+
+```{r Food Stamps Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B22003",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = usCompare)
+```
+
+```{r Food Stamps Table: Stat Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B22003",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS,
+            typeFilter = "summary"
+)
+```
+
+## Employment
+
+A key factor in grappling with the socioeconomic outlay of a community is understanding the employment landscape. The most significant unit of measurement is both rates of employment and non-employment, and proportions in the workforce, and out of it.
+
+```{r Employment Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B23025",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = usCompare,
+       stateCompare = stateCompare,
+       sort=FALSE,
+       summaryLevels = 2)
+```
+
+```{r Employment Table: Stat Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B23025",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS
+)
+```
+
+Another factor comprising the socioeconomic landscape is the kinds of work employing people in your community. To get a sense for this, we can examine the types of industries represented by workers in this radius.
+
+```{r Types of Industries Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B08126",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = usCompare,
+       stateCompare = stateCompare,
+       sort=TRUE)
+```
+
+```{r Types of Industries Table: Stat Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B08126",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS
+)
+```
+
+While not directly related to the socioeconomic outlay, the means which people use to get to work can tell us something about a) the use of public transportation---which may indicate availability of private transportation), and b) the number of people who work from home in a community.
+
+```{r Tranportation to Work Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B08101",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = usCompare,
+       stateCompare = stateCompare,
+       summaryLevels = 2,
+       sort=TRUE)
+```
+
+```{r Transportation to Work Table: Stat Helper,results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B08101",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS
+)
+```
+
+We can further visualize this geographically, by mapping proportions of people who take public transportation to work each day in each census tract.
+
+```{r Public Transportation Map, dev = "cairo_pdf",results=FALSE,message=FALSE,out.height=params$mapSize,out.width=params$mapSize,fig.align=params$mapAlign}
+mapper(geography="tract",
+       mapDF = df,
+       year=2021,
+       coords = df$info$coordinates,
+       tableID = "B08101",
+       variable = 25,
+       variableSummary = 1,
+       areaOnly = FALSE, 
+       filterRadius=1,MapTitle = "",
+       LegendTitle = "",
+       interactive = FALSE,
+       dispPerc = TRUE,
+       varsObject = ACS,
+       geosObject = geosObject,
+       markers = markers)
+```
+
+And here is the proportion of people, by census tract, who worked from home.
+
+```{r Work from Home Map, dev = "cairo_pdf",results=FALSE,message=FALSE,out.height=params$mapSize,out.width=params$mapSize,fig.align=params$mapAlign}
+mapper(geography="tract",
+       mapDF = df,
+       year=2021,
+       coords = df$info$coordinates,
+       tableID = "B08101",
+       variable = 49,
+       variableSummary = 1,
+       areaOnly = FALSE, 
+       filterRadius=1,
+       MapTitle = "",
+       LegendTitle = "",
+       interactive = FALSE,
+       dispPerc = TRUE,
+       varsObject = ACS,
+       geosObject = geosObject,
+       markers = markers)
+```
+
+Finally, we can explore the average hours worked by both men and women in the population.
+
+```{r Mean Hours Worked Table, dev = "cairo_pdf",message=FALSE}
+tabler(data_object = df,
+       year=2021,
+       variables=variables,
+       tableID = "B23020",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = NULL,
+       stateCompare=NULL,
+       summaryLevels = 2,
+       sort=FALSE,
+       dispPerc = FALSE,
+       mode = "summarize")
+```
+
+```{r Mean Hours Worked Table: Stat Helper,results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B23020",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS
+)
+```
+
+# Section 3: Nativity and Citizenship
+
+## Citizenship Status
+
+Understanding nativity and citizenship can provide a greater awareness of the needs of a community. Communities with higher proportions of non-citizens may have opportunities to minister in cross-cultural ways, and to provide material support to non-citizens who are socially vulnerable.
+
+```{r Citizenship Status Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B05001",
+       varsObject=ACS,
+       pdf=TRUE,
+       usCompare = usCompare)
+```
+
+```{r Citizenship Status Table: Stats Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B05001",
+            verbose=TRUE,
+            dataType = 4,            
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS
+)
+```
+
+Here's what this breakdown looks like when mapped over the census tracts in your radius.
+
+```{r Citizenship Status Map, dev = "cairo_pdf",results=FALSE,message=FALSE,out.height=params$mapSize,out.width=params$mapSize,fig.align=params$mapAlign}
+mapper(geography="tract",
+       mapDF = df,
+       year=2021,
+       coords = df$info$coordinates,
+       tableID = "B05001",
+       variable = 6,
+       variableSummary = 1,
+       areaOnly = FALSE, 
+       filterRadius=1,
+       MapTitle = "",
+       LegendTitle = "",
+       interactive = FALSE,
+       dispPerc = TRUE,
+       varsObject = ACS,
+       geosObject = geosObject,
+       markers = markers)
+```
+
+## Place of Birth in the United States
+
+The United States is a relatively mobile country, as many people move from state to state, and city to city, rather than staying tethered to a single location for generations. It can be helpful to understand how this dynamic plays out in your community.
+
+```{r Place of Birth Table, dev = "cairo_pdf",message=FALSE}
+tabler(df,
+       year=2021,
+       variables=variables,
+       tableID = "B06003",
+       pdf=TRUE,
+       varsObject=ACS,
+       usCompare = usCompare)
+```
+
+```{r Place of Birth Table: Stats Helper, results='asis',message=FALSE}
+stat_helper(df,
+            stat_table,
+            tableID = "B06003",
+            verbose=TRUE,
+            dataType = 4,             
+            ACS.TABLES = ACS.TABLES,             
+            ACS.VARS = ACS.VARS
+)
+```
+
+# Appendix 1
+
+The data from this report is sourced from the American Community Survey (ACS). While the US decennial census is a complete record of households and individuals in the United States, the ACS surveys a smaller sample on an annual basis to provide estimates of the entire United States. As such, all estimates are subject to a margin of error, due to sampling techniques used to compile the ACS data. Margin of error is not reported here, but is available as an update upon request.
+
+This report queries `r length(params$tableID)` concepts in the ACS. They are listed here for reference:
+
+```{r ACS.TABLES Table}
+   flextable(ACS.TABLES %>% filter(table_id %in% params$tableID),
+             col_keys = c("table_id","concept")) %>% 
+   theme_booktabs() %>% 
+   width(j="concept",width=4) %>% 
+   set_header_labels(values=c("Table ID","Concept"))
+```
+
+Many of these are further broken down into variables that capture the full range of responses for a particular question. To explore the full list, you can visit the [US Census Bureau](https://api.census.gov/data/2021/acs/acs5/variables.html).Any of the variables listed here are available for a custom report upon request.
