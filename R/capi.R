@@ -5,6 +5,7 @@
 #' @param year Year for data call.
 #' @param datatype My main focus is on ACS data right now.
 #' @param dataset Can select "acs1", "acsse" (supplemental est), "acs3", "acs5","flows" (migration flows) 
+#' @param censusVars To pass a census variable object to speed up processing time.
 #' @param tableID Formerly known as varBase, or concept, or group: i.e., "B01001"
 #' @param variables A vector of variables for the call. If multiple select variables per tableID are desired,
 #' then variables should be constructed as a named list, with tableID as name, and sub list items as 
@@ -73,6 +74,7 @@ capi <- function(year=NULL,
                  filterByGeoValue=NULL,
                  datatype="acs", 
                  dataset="acs5", 
+                 censusVars=NULL,
                  state=NULL,
                  county=NULL,
                  tract=NULL,
@@ -153,11 +155,11 @@ capi <- function(year=NULL,
 ## Data init ---------------------------------------------------------------
 
   # TODO Allow for caching of this data or not. Request permission.
-  ACS <- acs_vars_builder(year=year,dataset=dataset)
-  
+  #ACS <- acs_vars_builder(year=year,dataset=dataset)
+  CV <- get_census_variables(year=year,dataset_main = datatype, dataset_sub = dataset)
   # Check for mode mismatch
   if(!is.null(tableID)){
-    varcalccheck <- ACS[[2]] %>% filter(table_id %in% tableID)
+    varcalccheck <- CV[[2]] %>% filter(table_id %in% tableID)
     if(!is.na(match("median",varcalccheck$calculation))){
       stop("!> Summary tables do not work on median variables.")
     } 
@@ -196,7 +198,7 @@ capi <- function(year=NULL,
      if(is.null(tableID)){
        stop("!> To add all variables, you need to provide a tableID.")
      }
-     variables <- (ACS[[1]] %>% filter(table_id %in% tableID))$name
+     variables <- (CV[[1]] %>% filter(table_id %in% tableID))$name
      
    }else{
      if(verbose==TRUE)message(paste(dur(st),"Running varInputCheck()..."))
@@ -208,7 +210,7 @@ capi <- function(year=NULL,
      varlist <- variable_formatter(var=variables,
                                    tipc=tableID_pre.path,
                                    tableID=tableID,
-                                   ACS=ACS)
+                                   ACS=CV)
      varcount <- length(varlist)
      chunks <- 1 # Default chunk number (for sizing below)
      chunksize <- 48
@@ -219,7 +221,7 @@ capi <- function(year=NULL,
     for(i in 1:length(variables)){
       varlist <- c(varlist,variable_formatter(var=variables[i],
                                               tipc=tableID_pre.path,
-                                              ACS=ACS))
+                                              ACS=CV))
      }
     # For later reshaping, find total number of varlist, and break into chunks if > 50
     varcount <- length(varlist)
@@ -637,7 +639,7 @@ capi <- function(year=NULL,
    
      if(verbose==TRUE)message(paste(dur(st),"Attaching variable/tableID labels..."))
     
-    ACSV <- ACS[[1]] %>% mutate(labels = str_split_i(label,"!!",-1)) %>% 
+    ACSV <- CV[[1]] %>% mutate(labels = str_split_i(label,"!!",-1)) %>% 
       dplyr::select(name,concept,labels,calculation,type,type_base,varID)
     
     # Create columnn for labels, for easy plotting.

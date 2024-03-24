@@ -19,6 +19,7 @@ capi(
   filterByGeoValue = NULL,
   datatype = "acs",
   dataset = "acs5",
+  censusVars = NULL,
   state = NULL,
   county = NULL,
   tract = NULL,
@@ -68,6 +69,8 @@ of tracts, block_groups or other geography from. Options are currently
 \item{datatype}{My main focus is on ACS data right now.}
 
 \item{dataset}{Can select "acs1", "acsse" (supplemental est), "acs3", "acs5","flows" (migration flows)}
+
+\item{censusVars}{To pass a census variable object to speed up processing time.}
 
 \item{state}{Input (abb. or FIPS) of state for search.}
 

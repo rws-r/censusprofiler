@@ -16,36 +16,32 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 devtools::load_all()
-#library(censusprofiler)
-profile <- readRDS(system.file("data/profile.RDS",package="censusprofiler"))
-churches <- readRDS(system.file("data/churches.RDS",package="censusprofiler"))
-profile_batch <- readRDS(system.file("data/profile_batch.RDS",package="censusprofiler"))
-
+address <- "60 W Walton St, Chicago, IL 60610"
 ```
 
-Welcome to `censusprofileR`, a package designed to simplify regionalized census data capture. While `censusprofileR` can perform several functions, at its core, it takes a geographic point, draws a radius, and makes calls to the census api for geographical units around within that radius, and provides output that is more suited for presentation.
+Welcome to `censusprofiler`, a package designed to simplify regionalized census data capture. While `censusprofiler` can perform several functions, at its core, it takes a geographic point, draws a radius, and makes calls to the census api for geographical units around within that radius, and provides output that is more suited for presentation.
 
-All census calls are made via the US Census API, using the excellent `tidycensus` package. As `censusprofileR` is built on top of `tidycensus`, and as you will need a census API key, it is recommended that you first install `tidycensus` and walk through API install process first, before proceeding with `censusprofileR`.
+All census calls are made via the US Census API. In order to use the Census API (and `censusprofiler`), you will need an API key, which you can obtain here (https://api.census.gov/data/key_signup.html), To save the API key as an environmental variable, run `set_api_key()`.
 
-Currently, censusprofileR uses the American Community Survey 5-Year estimates (ACS). Other data is available (Decennial, ACS 1-Year, PUMS data). Implementation of these additional data sources remains a TODO for the package.
+This package was designed with the American Community Survey in mind. However, it is possible to obtain data from the Decennial census as well. Implementation of these additional data sources remains a TODO for the package.
 
 # Workflows
 
-This vingette provides a basic introduction to two kinds of workflows used with censusprofileR: single, and batch profile creation. The basic logic of `censusprofileR` is as follows: *Initial Setup* Data Setup Variable Profile Setup
+This vingette provides a basic introduction to two kinds of workflows used with censusprofiler: single, and batch profile creation. The basic logic of `censusprofiler` is as follows: *Initial Setup* Data Setup Variable Profile Setup
 
 *Profile Creation* Profile Call (single/batch) -\> Geo Processing -\> Census API call -\> Data Processing -\> Data Return
 
 ## Data Setup
 
-For `censusprofileR` to work, several datasets must be loaded into the global environment. These include:
+For `censusprofiler` to work, several datasets must be loaded into the global environment. These include:
 
 -   `ACS.GROUPS` and `ACS.VARS`: Dataframes containing all variables in the ACS 5-Year data.
 -   `profileList`: Vector containing all `varBase` (concepts) the user desires to query from ACS. Future implementations may include interactive selection methods, but for now, the user is responsible to create a vector of applicable `varBase` (concepts) from `ACS.GROUPS.`
 -   `profileVars`: Vector containing all `variables` the user desires to query. This is the true workhorse of the profile builder. The ACS API takes individual variables, not `varBase` (concepts) entries, so a master list of all individual variables must be created. To assist in this, use `profile_helper()`, an interactive variable builder that takes `profileList` and walks the user through selecting individual variables for the final profile call.
 
-The preceeding objects are all required for `censusprofileR` to function, as you will be required to pass `profileList` and `profileVars` objects to many of the functions. `ACS.GROUPS/VARS` is implicitly required in most functions.
+The preceeding objects are all required for `censusprofiler` to function, as you will be required to pass `profileList` and `profileVars` objects to many of the functions. `ACS.GROUPS/VARS` is implicitly required in most functions.
 
-In addition to the required data, several datasets are available to make `censusprofileR` run more efficiently.
+In addition to the required data, several datasets are available to make `censusprofiler` run more efficiently.
 
 -   `geos`: A nested list containing sf tables of all state, county, tract, and block groups (as selected by the user). If not present in the global environment, or passed through functions, `geos` objects will be generated via download. This affects performance time significantly.
 -   `stateCompare`: A profile object using supplied `profileVars` to create summary table of all variables in the user's profile, at the state level for comparison use in `displayTable()`.
@@ -113,9 +109,9 @@ While the list format can be a little unwieldy, we have packaged it in this way 
 
 ## Batch Profile Creation
 
-In addition to creating a single profile, `censusprofileR` can also run a batch from a list of geocoded addresses, using `create_profile_batch()`.
+In addition to creating a single profile, `censusprofiler` can also run a batch from a list of geocoded addresses, using `create_profile_batch()`.
 
-Before running the batch, however, make sure you have a data object with addresses and coordinates. To simplify this, `censusprofileR` has a helper function, `geocoder_batch()`. This function takes the addresses provided, then tries the census-supplied geocoder. If this fails, it defaults to Open Street Map (using `tmaptools::geocode_OSM`).Please abide by any usage restrictions (see <https://operations.osmfoundation.org/policies/nominatim/>).
+Before running the batch, however, make sure you have a data object with addresses and coordinates. To simplify this, `censusprofiler` has a helper function, `geocoder_batch()`. This function takes the addresses provided, then tries the census-supplied geocoder. If this fails, it defaults to Open Street Map (using `tmaptools::geocode_OSM`).Please abide by any usage restrictions (see <https://operations.osmfoundation.org/policies/nominatim/>).
 
 ```{r}
 head(churches)
@@ -155,7 +151,7 @@ head(profile_batch$data[[2]]$dfCount)
 
 # Standalone Functions
 
-`censusprofileR` provides two additional functions which can be implemented as standalone utilities, or in a rmarkdown report.
+`censusprofiler` provides two additional functions which can be implemented as standalone utilities, or in a rmarkdown report.
 
 ## displayTable()
 

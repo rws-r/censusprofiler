@@ -1,3 +1,153 @@
+# get_census_variables-------------------------------
+
+#' Get Census Variables
+#' 
+#' Sends a JSON request to the Census API to capture variables for use in 
+#' other functionality.
+#'
+#' @param year Year for variable draw
+#' @param dataset_main Main dataset parameter (e.g., 'acs' or 'dec')
+#' @param dataset_sub Secondary dataset parameter (e.g., 'acs5')
+#' @param dataset_last Tertiary dataset parameter (e.g., 'cprofile' or 'subject')
+#' @param detailed_tagging Logical, to flag additional data for dataframe.
+#' @param directory Logical, to grab list of all datasets available in census API
+#' @param verbose Logical parameter to signal verbose output.
+#'
+#' @return A dataframe
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' get_census_variables(year=2022, dataset_main="acs", dataset_sub="acs5")
+#' }
+get_census_variables <- function(year=NULL,
+                                 dataset_main=NULL,
+                                 dataset_sub=NULL,
+                                 dataset_last=NULL,
+                                 detailed_tagging=FALSE,
+                                 directory=FALSE,
+                                 verbose=FALSE
+){
+  if(directory==FALSE){ 
+    url <- "http://api.census.gov"
+    pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last,"variables")
+    path <- paste(pathElements,collapse="/")
+    
+    cv <- httr::GET(url,
+                    path=path)
+    
+    if(httr::status_code(cv)!=200){
+      stop(paste("!> There was an error in the GET call / json text. ERROR",httr::status_code(dt)))
+    }
+    
+    if(verbose==TRUE)message(paste("Cleaning data and formatting to dataframe..."))
+    
+    cv <- httr::content(cv,as="text")
+    cv <- jsonlite::fromJSON(cv)
+    cv <- as.data.frame(cv)
+    colnames(cv) <- cv[1,]
+    cv <- cv[-1,]
+
+    if(verbose==TRUE)message(paste("Reshaping data..."))
+    ## Filter out the extraneous rows.
+    if(grepl("acs",dataset_main,ignore.case = TRUE)==TRUE){
+      cv <- cv[grepl("Estimate!!*",cv$label)==TRUE,] 
+    }else{
+      cv <- subset(cv,grepl("!!Total*",cv$label) | 
+                grepl("!!Median*",cv$label))
+    }
+    
+    ## Sort by ascending `name`
+    cv <- cv[order(cv$name),]
+    
+    ## Clean up variable names
+    cv$name <- substr(cv$name,1,nchar(cv$name)-1)
+    
+    ## Add nice extra info.
+    cv <- cv %>% dplyr::mutate(table_id=gsub('(_*?)_.*','\\1',name),
+                               varID=gsub(".*_","",name),
+                               calculation = ifelse(str_detect(concept,"(?i)MEDIAN"),"median","count"),
+                               type = case_when(
+                                 str_count(label,"!!") == 1 ~ "root",
+                                 str_count(label,"!!") == 2 ~ "summary",
+                                 str_count(label,"!!") == 3 ~ "level_1",
+                                 str_count(label,"!!") == 4 ~ "level_2",
+                                 str_count(label,"!!") == 5 ~ "level_3",
+                                 str_count(label,"!!") == 6 ~ "level_4",
+                                 .default = "other"
+                               ),
+                               type_base = case_when(
+                                 str_count(label,"!!") == 1 ~ "root",
+                                 str_count(label,"!!") > 1 ~ "vars",
+                                 .default = "other"
+                               ))
+    
+    if(detailed_tagging==TRUE){
+      if(verbose==TRUE)message("     Creating detailed tagging...")
+      pb <- txtProgressBar(min = 1, max = nrow(cv), style = 3)
+      for(i in 1:nrow(cv)){
+        x <- cv[i,'name']
+        pre <- case_when(
+          stringr::str_starts(x,"B") ~ "B",   # Detailed Tables: Base Table
+          stringr::str_starts(x,"CP") ~ "CP", # Comparison Profile
+          stringr::str_starts(x,"C") ~ "C",   # Detailed Tables: Collapsed Table
+          stringr::str_starts(x,"S") ~ "S",   # Subject Table
+          stringr::str_starts(x,"DP") ~ "DP", # Data Profile
+          stringr::str_starts(x,"S0201") ~ "S0201",# Selected Population Profile
+          #stringr::str_starts(x,"R") ~ "",    # Ranking Table (TODO this and below exist, but can't find them rn)
+          #stringr::str_starts(x,"GCT") ~ "",  # Geographic Comparison Table
+          #stringr::str_starts(x,"K20") ~ "",  # Supplemental Table
+          #stringr::str_starts(x,"XK") ~ "",   # Experimental Estimates
+          #stringr::str_starts(x,"NP") ~ "",   # Narrative Profile
+          .default = "UNKNOWN"
+        )
+        
+        post <- str_sub(unlist(stringr::str_split(x,"_"))[1],-1,-1)
+        
+        cv[i,'table_type'] <- pre
+        cv[i,'sub_table'] <- post
+        
+        setTxtProgressBar(pb, i)
+      }
+      close(pb)
+    }
+    
+    cvt <- unique(cv[c("table_id","concept","calculation")])
+    cvlist <- list(variables = cv, tables = cvt)
+    return(cvlist)
+    
+  }else{
+    url <- "http://api.census.gov"
+    pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last)
+    path <- paste(pathElements,collapse="/")
+    
+    dir <- httr::GET("http://api.census.gov",
+                    path="data")
+    
+    if(httr::status_code(dir)!=200){
+      stop(paste("!> There was an error in the GET call / json text. ERROR",httr::status_code(dt)))
+    }
+    
+    if(verbose==TRUE)message(paste("Cleaning data and formatting to dataframe..."))
+    
+    dir <- httr::content(dir,as="text")
+    dir <- jsonlite::fromJSON(dir)
+    dir <- as.data.frame(dir)
+
+    dir <- dir[c('dataset.c_vintage',
+                 'dataset.c_dataset',
+                 'dataset.title',
+                 'dataset.description')]
+    
+    ## Sort by ascending `name`
+    dir <- dir[order(dir$dataset.c_vintage),]
+    
+    return(dir)
+  }
+}
+
+
+
 # acs_vars_builder-----------------------------------
 
 #' ACS Variable Builder
@@ -1894,3 +2044,45 @@ return(data)
   if(!is.null(filterRadius))data <- data %>% mutate(radius=filterRadius)
   return(data)
 }
+
+# set_api_key----------------------
+#' Set API Key
+#' 
+#' Sets the API key for the US Census API (see
+#' https://api.census.gov/data/key_signup.html) into the global environment for
+#' reuse with censusprofiler.
+#'
+#' @param key The API key obtained for use with US Census Data API.
+#' @param test Internal, for testing purposes.
+#'
+#' @return A global environmental variable.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' set_api_key(APIKEYGOESHERE)
+#' }
+#' 
+set_api_key <- function(key=NULL,
+                        test=FALSE){
+  if(is.null(key)){
+    stop("No key provided. Try again.")
+  }
+  ## Check for existing key
+  if(test==FALSE){
+    if(("CENSUS_API_KEY" %in% names(Sys.getenv()))==TRUE){
+      message("API key already exists. Do you really want to override it? y/n")
+      user_input <- readline()
+      if(!(user_input %in% c("y","yes"))){
+        stop("OK, we won't update it.")
+      }else{
+        message("OK, updating.")
+        Sys.setenv("CENSUS_API_KEY" = key)
+      }
+    }else{
+      Sys.setenv("CENSUS_API_KEY" = key)
+    }
+  }else{ 
+      Sys.setenv("TEST_CENSUS_API_KEY" = key)
+    }
+  }
