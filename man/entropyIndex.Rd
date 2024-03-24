@@ -24,7 +24,10 @@ entropyIndex(
   block_group = NULL,
   year = NULL,
   return = FALSE,
-  dataset = "acs5",
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
+  censusVars = NULL,
   verbose = FALSE
 )
 }
@@ -69,9 +72,13 @@ group. Numeric value corresponding to variable.}
 
 \item{return}{Logical parameter. If TRUE, return value only. Otherwise return formatted string.}
 
-\item{dataset}{Can select "acs1", "acsse" (supplemental est), "acs3", "acs5","flows" (migration flows)}
+\item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
 
-\item{verbose}{Logical parameter to specify whether to produce verbose output.}
+\item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
+
+\item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
+
+\item{censusVars}{Passthrough object to bypass get_census_variables #' @param verbose Logical parameter to specify whether to produce verbose output.}
 }
 \value{
 dataframe

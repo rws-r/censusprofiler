@@ -84,7 +84,7 @@ get_census_variables <- function(year=NULL,
     
     if(detailed_tagging==TRUE){
       if(verbose==TRUE)message("     Creating detailed tagging...")
-      pb <- txtProgressBar(min = 1, max = nrow(cv), style = 3)
+      if(verbose==TRUE)pb <- txtProgressBar(min = 1, max = nrow(cv), style = 3)
       for(i in 1:nrow(cv)){
         x <- cv[i,'name']
         pre <- case_when(
@@ -107,13 +107,13 @@ get_census_variables <- function(year=NULL,
         cv[i,'table_type'] <- pre
         cv[i,'sub_table'] <- post
         
-        setTxtProgressBar(pb, i)
+        if(verbose==TRUE)setTxtProgressBar(pb, i)
       }
-      close(pb)
+      if(verbose==TRUE)close(pb)
     }
     
     cvt <- unique(cv[c("table_id","concept","calculation")])
-    cvlist <- list(variables = cv, tables = cvt)
+    cvlist <- list(variables = cv, groups = cvt)
     return(cvlist)
     
   }else{
@@ -146,137 +146,6 @@ get_census_variables <- function(year=NULL,
   }
 }
 
-
-
-# acs_vars_builder-----------------------------------
-
-#' ACS Variable Builder
-#'
-#' A simple function to construct the variable lists returned from the ACS dataset.
-#' Uses tidycensus::load_variables() and saves both the output as a global object,
-#' and a filtered object as a summary file. Primarily internal use.
-#'
-#' @param year Year of ACS data return.
-#' @param dataset Defaults to "acs5", but can use any valid ACS dataset. 
-#' Currently, this and all my functions are tuned to the ACS dataset. 
-#' Future functionality may include decennial data and PUMS.
-#' @param return If FALSE, load variables into env., otherwise return to variable.
-#' @param detailed_tagging Logical: TRUE provides column tagging kind of ACS var table.
-#' @param verbose Logical parameter to specify whether to produce verbose output.
-#'
-#' @return Produces two objects in the global environment: ACS.VARS and ACS.TABLES.
-#' ACS.VARS is a master list of all variables, ACS.TABLES is a filtered dataframe
-#' of top-level variables.
-#'
-#'
-#' @importFrom tidycensus load_variables
-#' @importFrom stringr str_count
-#' @importFrom dplyr case_when
-#' @importFrom dplyr mutate
-#'
-#' @examples
-#' \dontrun{
-#' acs_vars_builder()
-#' }
-acs_vars_builder <- function(year,
-                             dataset="acs5",
-                             detailed_tagging=FALSE,
-                             return=TRUE,
-                             verbose=FALSE)
-{
-  
-  # To prevent "no visible binding for global variable" error
-  name <- concept <- map_chr <- geography <- calculation <- table_id <- NULL
-  varName <- paste("ACS.VARS.",year,sep="")
-
-  if(exists(varName,inherits = TRUE)==FALSE){
-    if(!file.exists(file.path(getwd(),"data",paste("ACS.VARS.",year,".RDS",sep=""),fsep="/"))){
-      if(verbose==TRUE)message("acs_vars_builder(): Trying to download ACS variables...")
-      ACS.VARS <- load_variables(year,dataset=dataset)
-      if(verbose==TRUE)message("      Formatting variables...")
-      ACS.VARS <- ACS.VARS %>% mutate(table_id=gsub('(_*?)_.*','\\1',name))
-      ACS.VARS <- ACS.VARS %>% mutate(calculation = ifelse(str_detect(concept,"(?i)MEDIAN"),"median","count"))
-      ACS.VARS <- ACS.VARS %>% mutate(type = case_when(
-        str_count(label,"!!") == 1 ~ "root",
-        str_count(label,"!!") == 2 ~ "summary",
-        str_count(label,"!!") == 3 ~ "level_1",
-        str_count(label,"!!") == 4 ~ "level_2",
-        str_count(label,"!!") == 5 ~ "level_3",
-        str_count(label,"!!") == 6 ~ "level_4",
-        .default = "other"
-      ))
-      ACS.VARS <- ACS.VARS %>% mutate(type_base = case_when(
-        str_count(label,"!!") == 1 ~ "root",
-        str_count(label,"!!") > 1 ~ "vars",
-        .default = "other"
-      ))
-      #ACS.VARS <- ACS.VARS %>% mutate(varID=strsplit(name,"_") %>% map_chr(.,2))
-      ACS.VARS <- ACS.VARS %>% mutate(varID=strsplit(name,"_")[[1]][[2]])
-      
-    if(detailed_tagging==TRUE){
-      if(verbose==TRUE)message("     Creating detailed tagging...")
-      pb <- txtProgressBar(min = 1, max = nrow(ACS.VARS), style = 3)
-      for(i in 1:nrow(ACS.VARS)){
-        x <- ACS.VARS[i,'name']
-        pre <- case_when(
-          stringr::str_starts(x,"B") ~ "B",   # Detailed Tables: Base Table
-          stringr::str_starts(x,"CP") ~ "CP", # Comparison Profile
-          stringr::str_starts(x,"C") ~ "C",   # Detailed Tables: Collapsed Table
-          stringr::str_starts(x,"S") ~ "S",   # Subject Table
-          stringr::str_starts(x,"DP") ~ "DP", # Data Profile
-          stringr::str_starts(x,"S0201") ~ "S0201",# Selected Population Profile
-          #stringr::str_starts(x,"R") ~ "",    # Ranking Table (TODO this and below exist, but can't find them rn)
-          #stringr::str_starts(x,"GCT") ~ "",  # Geographic Comparison Table
-          #stringr::str_starts(x,"K20") ~ "",  # Supplemental Table
-          #stringr::str_starts(x,"XK") ~ "",   # Experimental Estimates
-          #stringr::str_starts(x,"NP") ~ "",   # Narrative Profile
-          .default = "UNKNOWN"
-        )
-        
-        post <- str_sub(unlist(stringr::str_split(x,"_"))[1],-1,-1)
- 
-        ACS.VARS[i,'table_type'] <- pre
-        ACS.VARS[i,'sub_table'] <- post
-        
-        setTxtProgressBar(pb, i)
-      }
-      close(pb)
-    }
-      
-      ACS.TABLES <- ACS.VARS %>% select(table_id,concept,geography,calculation)
-      ACS.TABLES <- unique(ACS.TABLES)
-      if(verbose==TRUE)message("     Saving ACS variables...")
-    }else{
-      ACS.VARS <- readRDS(file.path(getwd(),"data",paste("ACS.VARS.",year,".RDS",sep=""),fsep="/"))    
-      ACS.TABLES <- readRDS(file.path(getwd(),"data",paste("ACS.TABLES.",year,".RDS",sep=""),fsep="/")) 
-    }
-    # if(return==FALSE){
-    #   if(verbose==TRUE)message("     Saving vars to global environment...")
-    #   assign(paste("ACS.VARS.",year,sep=""),ACS.VARS,envir = .GlobalEnv)
-    #   assign(paste("ACS.TABLES.",year,sep=""),ACS.TABLES,envir = .GlobalEnv)
-    # }else{
-      # Returning both dataframes for testing.
-      acsLists <- list(ACS.VARS,ACS.TABLES)
-      names(acsLists) <- list(paste("ACS.VARS.",year,sep=""),
-                              paste("ACS.TABLES.",year,sep=""))
-      
-      return(acsLists)
-    # }
-    if(verbose==TRUE)message("     Done.")
-  }else{
-    if(verbose==TRUE)message("acs_vars_builder(): Variables exist in global environment...")
-  }
-  if(return==TRUE){
-    av <- get(paste("ACS.VARS.",year,sep=""))
-    at <- get(paste("ACS.TABLES.",year,sep=""))
-    acsLists <- list(av,at)
-    names(acsLists) <- list(paste("ACS.VARS.",year,sep=""),
-                            paste("ACS.TABLES.",year,sep=""))
-    return(acsLists)
-    if(verbose==TRUE)message("     Returned.")
-  }
-}
-
 # comparison_helper -------------------------------------------------------
 ## TODO The download doesn't work for states. I need to fix this.
 #' Comparison Helper
@@ -289,7 +158,6 @@ acs_vars_builder <- function(year,
 #' @param verbose Logical parameter to specify whether to produce verbose output.
 #'
 #' @return Dataframe
-#' @export
 #'
 #' @examples \dontrun{
 #' comparison_helper(data,comparisondata,tableID="B02001",stateFilter=17)
@@ -370,12 +238,14 @@ comparison_helper <- function(df=NULL,
 #'
 #' @param verbose Whether to provide verbose output.
 #' @param coordColName Default, set to "sf", but can be changed if non-sf object.
-#' @param showCall Whether get_acs() should have showCall set to TRUE
 #' @param geography Either "us" or "state".
 #' @param year Numeric value specifying year of ACS call.
 #' @param variables A variables vector.
 #' @param tableID A tableID vector.
-#' @param censusDataset The census dataset for calls. Defaults to `acs5`.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
 #' @param profileDataset Optional dataset to determine state/county for filtering.
 #' @param geosObject Optional geosObject to speed up processing time.
 #' @param test Internal: for testing purposes.
@@ -403,9 +273,11 @@ create_comparison_data <- function(
   tableID=NULL,
   coordColName="sf",
   verbose=FALSE,
-  showCall=FALSE,
   geosObject=NULL,
-  censusDataset="acs5",
+  dataset_main="acs",
+  dataset_sub="acs5",
+  dataset_last=NULL,
+  censusVars=NULL,
   test=FALSE){
   
   # TODO It would be interesting to also run this with county geographies.
@@ -448,10 +320,14 @@ create_comparison_data <- function(
   }
  }
   
-  if(verbose==TRUE)message("Getting ACS...")
-  ACS <- acs_vars_builder(year=year)
-  ACS.VARS <- ACS[[1]]
-  ACS.TABLES <- ACS[[2]]
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
   
   if(verbose==TRUE)message("> Beginning profile batch build.")
   
@@ -570,8 +446,10 @@ create_comparison_data <- function(
 #' @param filterSummary Logical parameter to specify whether to filter out summary levels (typically _001 and therefore "root").
 #' @param filterSummaryLevels Explicit description of lowest type denoting summary level. Also excludes lower levels.#' 
 #' @param return Logical parameter. If TRUE, return value only. Otherwise return formatted string.
-#' @param dataset Can select "acs1", "acsse" (supplemental est), "acs3", "acs5","flows" (migration flows) 
-#' @param verbose Logical parameter to specify whether to produce verbose output.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables #' @param verbose Logical parameter to specify whether to produce verbose output.
 #' 
 #' @importFrom ggplot2 geom_point
 #'
@@ -604,13 +482,24 @@ entropyIndex <- function(data=NULL,
                          block_group=NULL,
                          year=NULL,
                          return=FALSE,
-                         #  plot=FALSE,
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=NULL,
                          verbose=FALSE){
   
   table_id <- variable <- concept <- estimate <- tot_pop_pct <- 
     pct_by_type <- tot_pop <- tot_pop_pct <- name <- geoid <- type <- 
     est_total <- sub_total <- NULL
+  
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
   
   if(is.null(tableID)){
     stop("No tableID supplied. Please try again.")
@@ -624,7 +513,6 @@ entropyIndex <- function(data=NULL,
   ## Create data object if does not exist
   if(is.null(data)){
     data <- profiler(year=year,
-                     dataset=dataset,
                      tableID=tableID,
                      variables=variables,
                      geography=geography,
@@ -636,6 +524,7 @@ entropyIndex <- function(data=NULL,
                      county=county,
                      tract=tract,
                      block_group=block_group,
+                     censusVars=CV,
                      verbose=verbose)
   }
   
@@ -931,15 +820,20 @@ varInputCheck <- function(tableID = NULL,
 }
 
 # dateInputCheck---------------------
-dateInputCheck <- function(year = NULL,dataset = NULL,verbose=FALSE){
+dateInputCheck <- function(year = NULL,
+                           dataset_main="acs",
+                           dataset_sub="acs5",
+                           dataset_last=NULL,
+                           censusVars=NULL,
+                           verbose=FALSE){
   if(is.null(year)){
-    ## If datatype=="acs", set to year - 2, as this seems to be a safe bet for released data from ACS.
+    ## If datatype=="acs", set to year - 2, as this seems to be a safe bet for released data from CV.
     ## If decennial, round down to nearest decade.
-    acssets <- c("acs1","acs3","acs5")
+    cvsets <- c("acs1","acs3","acs5")
     decsets <- c("ddhca","dhc","dp","pl","pes","dhcas","cd118")
-    if(dataset %in% acssets){
+    if(dataset_sub %in% cvsets){
       year <- as.numeric(format(as.Date(Sys.Date(), format="%d/%m/%Y"),"%Y"))-2
-    }else if(dataset %in% decsets){
+    }else if(dataset_sub %in% decsets){
       year <- floor(as.numeric(format(as.Date(Sys.Date(), format="%d/%m/%Y"),"%Y"))/10)*10
     }else{
       stop("!> No year supplied, and no valid census dataset supplied.")
@@ -974,7 +868,10 @@ dateInputCheck <- function(year = NULL,dataset = NULL,verbose=FALSE){
 #' @param county ACS county (descriptive or FIPS) passed to function from capi().
 #' @param savePath Local save path for VRE tables.
 #' @param verbose Logical parameter to display output
-#' @param censusDataset Can select "acs1", "acsse" (supplemental est), "acs3", "acs5","flows" (migration flows) 
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
 #'
 #' @return Returns a dataframe with variance, standard error, and margin of error for aggregate data.
 #'
@@ -997,14 +894,15 @@ get_vre_table <- function(
     data=NULL,
     year=NULL,
     geography=NULL,
-    # geos=NULL,
     tableID, ## TODO: make this suitable for a list of variabvles
     variableList, ## A list of subvariables to include
     variableAgg=FALSE,
     state=NULL,
     county=NULL,
-    censusDataset="acs5",
-    verbose=FALSE,
+    dataset_main="acs",
+    dataset_sub="acs5",
+    dataset_last=NULL,
+    censusVars=NULL,    verbose=FALSE,
     savePath=paste(getwd(),"/data/VRE/",sep="")
 ){
   
@@ -1027,12 +925,17 @@ get_vre_table <- function(
   #  summary data. But if side-by-side individual bars, they have to have separate 
   #  MOEs.")
   
-  ACS <- acs_vars_builder(year)
-  ACS.VARS <- ACS[[1]]
-  ACS.TABLES <- ACS[[2]]
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
   
   #Convert variableList to simple IDs (VRE tables use simple ID).
-  variableList <- ACS.VARS %>% filter(name %in% variableList)
+  variableList <- CV.VARS %>% filter(name %in% variableList)
   variableList <- as.numeric(sprintf("%01d",as.numeric(variableList$varID)))
   
   # If not present, grab the table of FIPS codes for simplicity.
@@ -1058,7 +961,7 @@ get_vre_table <- function(
   countyCode <- county
   
   # Get a list of variables.
-  VARS <- ACS.TABLES
+  VARS <- CV.GROUPS
   
   # Check to see if we have the VRE table saved/converted to speed things up.
   # If it doesn't yet exist, grab the VRE file and unpack, and save it as an
@@ -1077,9 +980,9 @@ get_vre_table <- function(
   }else{
     fileVar <- paste(tableID,"_",stateCode,sep="")
   }
-  acsFTP <- paste("https://www2.census.gov/programs-surveys/acs/replicate_estimates/",year,"/data/5-year/",sep="")
-  acsFTP <- paste(acsFTP,sprintf("%03d",summaryLevelCode),"/",fileVar,".csv",compression,sep="")
-  acsSaveFile <- paste(savePath,fileVar,".csv",compression,sep="")
+  cvFTP <- paste("https://www2.census.gov/programs-surveys/acs/replicate_estimates/",year,"/data/5-year/",sep="")
+  cvFTP <- paste(cvFTP,sprintf("%03d",summaryLevelCode),"/",fileVar,".csv",compression,sep="")
+  cvSaveFile <- paste(savePath,fileVar,".csv",compression,sep="")
   
   saveFileRDS <- paste(savePath,fileVar,".RDS",sep="")
   
@@ -1088,16 +991,16 @@ get_vre_table <- function(
     VREall <- readRDS(saveFileRDS)
   }else{
     if(verbose==TRUE)message("Attempting download of VRE files...")
-    download.file(acsFTP,acsSaveFile)
+    download.file(cvFTP,cvSaveFile)
     message("Parsing file and re-saving as RDS...")
     if(compression==".zip"){
-      VREall <- read.csv(unzip(acsSaveFile))
+      VREall <- read.csv(unzip(cvSaveFile))
     }else{
-      VREall <- read.csv(gzfile(acsSaveFile))
+      VREall <- read.csv(gzfile(cvSaveFile))
     }
     saveRDS(VREall,saveFileRDS)
     if(verbose==TRUE)message("Removing download...")
-    file.remove(acsSaveFile)
+    file.remove(cvSaveFile)
     message("Done.")
   }
   
@@ -1220,6 +1123,7 @@ speedtest <- function(x,y){
 #' the United States, with variables from a variable list, Additionally, can calculate
 #' distribution statistics.
 #'
+#' @param year Year value for variable selection.
 #' @param data A data object generated by "master_list" set to TRUE, to create summary_table.
 #' @param summary_table Set to `TRUE` to create basic distribution statistics. 
 #' @param master_list Set to `TRUE` to download census tracts with variable list provided. 
@@ -1233,6 +1137,10 @@ speedtest <- function(x,y){
 #'   /data/ folder to reduce runtime and memory load.
 #' @param stateStart Related to saveProgress, if the process is interrupted, a 
 #' state FIPS code to begin the process at. 
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
 #' @param verbose Logical parameter to specify whether to produce verbose output.   
 #'
 #' @importFrom stats sd
@@ -1249,7 +1157,8 @@ speedtest <- function(x,y){
 #' # Download all census tracts.
 #' stat_table_builder(master_list=TRUE) 
 #' }
-stat_table_builder <- function(data=NULL,
+stat_table_builder <- function(year=NULL,
+                               data=NULL,
                                summary_table=FALSE,
                                master_list=FALSE,
                                compiler=FALSE,
@@ -1260,10 +1169,23 @@ stat_table_builder <- function(data=NULL,
                                geosObject=NULL,
                                saveProgress=FALSE,
                                stateStart=NULL,
+                               dataset_main="acs",
+                               dataset_sub="acs5",
+                               dataset_last=NULL,
+                               censusVars=NULL,
                                verbose=FALSE){
   
   ## Deal with "no visible binding for global variable" error 
   GEOID <- STATEFP <- COUNTYFP <- NULL
+  
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
   
   if(compiler==TRUE){
     relPath <- "data/statfiles/"
@@ -1359,7 +1281,7 @@ stat_table_builder <- function(data=NULL,
       if(user_input!="y"){
         stop("OK, quitting.")
       }else{
-        ## Loop through get_acs() requests by state and append to df.
+        ## Loop through profiler() requests by state and append to df.
         data <- NULL
         if(test==FALSE){
           pb <- txtProgressBar(min = 1, max = length(states), style = 3)
@@ -1373,6 +1295,7 @@ stat_table_builder <- function(data=NULL,
                         county=county,
                         geography=geography,
                         verbose = verbose,
+                        censusVars = CV,
                         test=test,
                         fast=TRUE) 
           x <- x$data$type1data
@@ -1494,8 +1417,10 @@ stat_table_builder <- function(data=NULL,
 #' @param tableID The tableID value for filtering.
 #' @param variable The variable value for filtering.
 #' @param dataType Allows us to specify whether this is a df, dfCount, or dfNoSummary table.
-#' @param varsObject A dataframe containing census variables from the ACS or
-#'   other dataset.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
 #' @param verbose Set to `TRUE` to print output on rmarkdown (or other) report.
 #' @param variables List of tableID names to test tableID input.
 #' 
@@ -1518,7 +1443,10 @@ stat_helper <- function(data,
                         variable=NULL,
                         dataType=4,
                         year=2022,
-                        varsObject=NULL,
+                        dataset_main="acs",
+                        dataset_sub="acs5",
+                        dataset_last=NULL,
+                        censusVars=NULL,
                         verbose=FALSE
 ){
   
@@ -1526,12 +1454,14 @@ stat_helper <- function(data,
   tableID.x <- pct <- mean_pct <- sd_pct <- estimate <- mean_est <- sd_est <- 
     zScore_pct <- zScore_est <- table_id.x <- table_id <- NULL
   
-  if(is.null(varsObject)){
-    stop("To run efficiently, please include master census vars in stat_formula() execution.")
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
   }else{
-    ACS.VARS <- varsObject[[1]]
-    ACS.TABLES <- varsObject[[2]]
+    CV <- censusVars
   }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
   
   if(verbose==TRUE)message(" -- stat_helper | checking datatype")
   dtype <- type_data(data)
@@ -1554,7 +1484,7 @@ stat_helper <- function(data,
 
    if(!is.null(tableID)){
      if(verbose==TRUE)message(" -- stat_helper | checking tableID inputs")
-     TILIST <- ACS.TABLES$table_id
+     TILIST <- CV.GROUPS$table_id
     if(!(tableID %in% TILIST)){
       stop("Whoops, it appears that this table_id doesn't appear in variables.")
     }
@@ -1700,22 +1630,34 @@ type_data <- function(dataset,
 #' @param varEndNum End number of variables.
 #' @param varSummaryNum Summary number.
 #' @param varArray A manual list if need be.
+#' @param verbose Logical parameter to specify additional output.
 #'
 #' @return Returns either a vector, or a nested list.
 #'
 #'
 #' @examples
 #' \dontrun{
-#' variable_builder(c("B01001","B01002"),censusVars=ACS.VARS,
+#' variable_builder(c("B01001","B01002"),censusVars=CV.VARS,
 #' varStartNum = c(1,1),varEndNum=c(3,3), varArray=NULL,varSummaryNum = c(1,1))
 #' }
 variable_builder <- function(tableID=NULL,
-                             censusVars=NULL,
                              varStartNum=NULL,
                              varEndNum=NULL,
                              varSummaryNum=NULL,
-                             varArray=NULL){
-  ACS.VARS <- censusVars
+                             varArray=NULL,
+                             censusVars=NULL,
+                             verbose=FALSE){
+  
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
+  
   x <- NULL
   varLists <- list()
   allVars <- NULL
@@ -1817,7 +1759,7 @@ variable_builder <- function(tableID=NULL,
   }
   x[[paste("allVars")]] <- allVars # Add a master list as well.
   x[[paste("allSummaryVars")]] <- varSummary # Add a master list as well.
-  badVars <- setdiff(x$allVars,ACS.VARS$name)
+  badVars <- setdiff(x$allVars,CV.VARS$name)
   if(length(badVars)>0){
     bv <- NULL
     for(z in 1:length(badVars)){
@@ -1838,8 +1780,10 @@ dur <- function(st){
 
 # tableID_pre_check--------------------------------------
 # Table Profile selection
-tableID_pre_check <- function(x=NULL,acsMatch=FALSE,ACS=NULL){
-  if(acsMatch==FALSE){
+tableID_pre_check <- function(x=NULL,
+                              cvMatch=FALSE,
+                              censusVars=NULL){
+  if(cvMatch==FALSE){
     if(is.null(x)){
       z <- c("NO_TABLE_ID","CHECK")
     }else{
@@ -1871,7 +1815,7 @@ tableID_pre_check <- function(x=NULL,acsMatch=FALSE,ACS=NULL){
     }
     return(z)
   }else{
-    return(match(x,ACS[[1]]$table_id))
+    return(match(x,censusVars[[1]]$table_id))
   }
 }
 
@@ -1937,7 +1881,7 @@ pseudo_tableID <- function(vars,
 variable_formatter <- function(var=NULL,
                                tipc=NULL,
                                tableID=NULL,
-                               ACS=NULL){
+                               censusVars=NULL){
   # tipc needs to be a tableID_pre_check object
   if(!is.numeric(var)){ # Check for numeric/badly formed mixed vars
     # Do variable testing.
@@ -1945,7 +1889,7 @@ variable_formatter <- function(var=NULL,
     tids <- pseudo_tableID(var)
     for(a in 1:length(tids)){
       tippt <- tableID_pre_check(tids[a])
-      tipptm <- tableID_pre_check(tids[a],acsMatch = TRUE,ACS=ACS)
+      tipptm <- tableID_pre_check(tids[a],cvMatch = TRUE,censusVars=censusVars)
       tippt <- tippt[1]
       if(tippt=="NOTFOUND"){
         stop(paste("!> There is no table ID for `",tids[a],"` Check for typos.",sep=""))

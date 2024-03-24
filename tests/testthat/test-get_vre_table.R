@@ -5,7 +5,8 @@ test_that("get_vre_table() works", {
                      tableID = "B02001",
                      variableList = "B02001_003",
                      state=17,
-                     county=043)
+                     county=043,
+                     censusVars = CV)
   
   expect_contains(names(x),c("variable","variance","se","moe"))
 })

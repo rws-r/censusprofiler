@@ -4,7 +4,17 @@
 \alias{profile_helper}
 \title{Profile Helper}
 \usage{
-profile_helper(tableID = NULL, year = NULL, allCols = FALSE, test = FALSE)
+profile_helper(
+  tableID = NULL,
+  year = NULL,
+  allCols = FALSE,
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
+  censusVars = NULL,
+  test = FALSE,
+  verbose = FALSE
+)
 }
 \arguments{
 \item{tableID}{Vector with variables for inclusion.
@@ -15,7 +25,17 @@ should be accessed.}
 \item{allCols}{Parameter to display all columns during review of variables 
 for selection.}
 
+\item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
+
+\item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
+
+\item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
+
+\item{censusVars}{Passthrough object to bypass get_census_variables}
+
 \item{test}{Internal: logical parameter to specificy testing environment.}
+
+\item{verbose}{Logical parameter to specify verbose output.}
 }
 \value{
 Vector with variable values stored.

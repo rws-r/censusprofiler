@@ -12,9 +12,11 @@ create_comparison_data(
   tableID = NULL,
   coordColName = "sf",
   verbose = FALSE,
-  showCall = FALSE,
   geosObject = NULL,
-  censusDataset = "acs5",
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
+  censusVars = NULL,
   test = FALSE
 )
 }
@@ -33,11 +35,15 @@ create_comparison_data(
 
 \item{verbose}{Whether to provide verbose output.}
 
-\item{showCall}{Whether get_acs() should have showCall set to TRUE}
-
 \item{geosObject}{Optional geosObject to speed up processing time.}
 
-\item{censusDataset}{The census dataset for calls. Defaults to `acs5`.}
+\item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
+
+\item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
+
+\item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
+
+\item{censusVars}{Passthrough object to bypass get_census_variables}
 
 \item{test}{Internal: for testing purposes.}
 }

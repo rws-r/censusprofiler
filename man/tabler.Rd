@@ -6,8 +6,6 @@
 \usage{
 tabler(
   data_object = NULL,
-  datatype = "acs",
-  dataset = "acs5",
   mode = "summarize",
   tableID = NULL,
   variables = NULL,
@@ -32,16 +30,15 @@ tabler(
   geography = "tract",
   year = NULL,
   geosObject = NULL,
-  varsObject = NULL,
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
+  censusVars = NULL,
   verbose = FALSE
 )
 }
 \arguments{
 \item{data_object}{A census data object.}
-
-\item{datatype}{Internal: specify which census data type to select.}
-
-\item{dataset}{Internal: specify which census data source to select.}
 
 \item{mode}{Options for display calculations: "summarize", "summarizeinc","simple","bygeo","nosummary"}
 
@@ -86,14 +83,19 @@ using median or mean data.}
 
 \item{block_group}{Input (abb. or FIPS) of block group for search.}
 
-\item{geography}{Geography designation for get_acs().}
+\item{geography}{Geography designation for capi().}
 
-\item{year}{Year designation for get_acs().}
+\item{year}{Year designation for capi().}
 
 \item{geosObject}{Optional geosObject object to speed up geo processing.}
 
-\item{varsObject}{A dataframe containing census variables from the ACS or
-other dataset.}
+\item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
+
+\item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
+
+\item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
+
+\item{censusVars}{Passthrough object to bypass get_census_variables}
 
 \item{verbose}{Pass through param to create_profile() for feedback.}
 }

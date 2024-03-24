@@ -18,15 +18,15 @@
 #' @param filterRadius In miles, the radius for the filter.
 #' @param state A state value to filter.
 #' @param county A county value to filter.
-#' @param geography Geography designation for get_acs().
-#' @param year Year designation for get_acs(). 
+#' @param geography Geography designation for capi().
+#' @param year Year designation for capi(). 
 #' @param verbose Pass through param to create_profile() for feedback.
 #' @param geosObject Optional geosObject object to speed up geo processing.
 #' @param data_object A census data object.
-#' @param datatype Internal: specify which census data type to select.
-#' @param dataset Internal: specify which census data source to select.
-#' @param varsObject A dataframe containing census variables from the ACS or
-#'   other dataset.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
 #' @param tableID Formerly known as varBase, or concept, or group: i.e., "B01001"
 #' @param variables A vector of variables for the call. 
 #' @param sort_bygroup Logical flag to specify whether to sort by variable group.
@@ -56,14 +56,9 @@
 #' tableID="B02001",variables=NULL,summaryLevels=1,)
 #'}
 tabler <- function(data_object=NULL,
-                   #dataRowNum=1,
-                   #datFiltered=NULL,
-                   datatype="acs",
-                   dataset="acs5",
                    mode="summarize",
                    tableID=NULL,
                    variables=NULL,
-                   #cols=c("labels","estimate","pct","sub_pct"),
                    cols=c("labels","estimate","pct"),
                    dispPerc=TRUE,
                    type=NULL,
@@ -85,7 +80,10 @@ tabler <- function(data_object=NULL,
                    geography="tract",
                    year=NULL,
                    geosObject=NULL,
-                   varsObject=NULL,
+                   dataset_main="acs",
+                   dataset_sub="acs5",
+                   dataset_last=NULL,
+                   censusVars=NULL,
                    verbose=FALSE){
   
   ## To avoid "no visible binding for global variable" error
@@ -113,24 +111,19 @@ tabler <- function(data_object=NULL,
     
     # ## Execute capi() with supplied parameters.
     data_object <- profiler(year=year,
-               dataset=dataset,
-               tableID=tableID,
-               variables=variables,
-               geography=geography,
-               filterAddress=filterAddress,
-               filterRadius=filterRadius,
-               filterSummaryLevels=filterSummaryLevels,
-               state=state,
-               county=county,
-               tract=tract,
-               block_group=block_group,
-               # place=place,
-               # consolidatedCity=consolidatedCity,
-               # region=region,
-               # division=division,
-               verbose=verbose,
-               #profile=TRUE,
-               st=st)
+                            tableID=tableID,
+                            variables=variables,
+                            geography=geography,
+                            filterAddress=filterAddress,
+                            filterRadius=filterRadius,
+                            filterSummaryLevels=filterSummaryLevels,
+                            state=state,
+                            county=county,
+                            tract=tract,
+                            block_group=block_group,
+                            censusVars=censusVars,
+                            verbose=verbose,
+                            st=st)
 
     if(verbose==TRUE)message(paste(dur(st),"Download success..."))
     # Check data_object 
@@ -160,25 +153,14 @@ tabler <- function(data_object=NULL,
   }
     
   ## Get census variables
-  if(verbose==TRUE)message("- mapper | Getting ACS vars...")
-  if(!is.null(varsObject)){
-    ACS <- varsObject
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
   }else{
-    ACS <- acs_vars_builder(year=year,dataset=dataset)  
+    CV <- censusVars
   }
-  ACS.VARS <- ACS[[1]]
-  ACS.GROUPS <- ACS[[2]]
-  
-  # Load state geographies from geos object 
-  # if(verbose==TRUE)message(paste(dur(st),"Loading state geos from geos object..."))
-  # if(!is.null(stateCompare)){
-  #   stateCompare <- stateCompare %>% filter(state=stateCompare)
-  #   # geos <- geo_var_builder(geography=c("state"),
-  #   #                 try="local",
-  #   #                 geosObject=geosObject,
-  #   #                 verbose=verbose)
-  #   # geo_states <- geos$geo_states
-  #   }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
 
   ## Select proper sub-data.
   if(verbose==TRUE)message(paste(dur(st),"Selecting correct subdata..."))

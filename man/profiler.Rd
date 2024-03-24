@@ -7,8 +7,10 @@
 profiler(
   name = NULL,
   year = NULL,
-  datatype = "acs",
-  dataset = "acs5",
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
+  censusVars = NULL,
   tableID = NULL,
   variables = NULL,
   geography = NULL,
@@ -36,9 +38,13 @@ profiler(
 
 \item{year}{Year for data selection.}
 
-\item{datatype}{Internal: specify which census data type to select.}
+\item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
 
-\item{dataset}{Internal: specify which census data source to select.}
+\item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
+
+\item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
+
+\item{censusVars}{Passthrough object to bypass get_census_variables}
 
 \item{tableID}{Specification for concept, or group: e.g., "B01001"}
 

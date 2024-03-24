@@ -16,7 +16,10 @@ stat_helper(
   variable = NULL,
   dataType = 4,
   year = 2022,
-  varsObject = NULL,
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
+  censusVars = NULL,
   verbose = FALSE
 )
 }
@@ -43,8 +46,13 @@ stat_helper(
 
 \item{year}{Year for data call.}
 
-\item{varsObject}{A dataframe containing census variables from the ACS or
-other dataset.}
+\item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
+
+\item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
+
+\item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
+
+\item{censusVars}{Passthrough object to bypass get_census_variables}
 
 \item{verbose}{Set to `TRUE` to print output on rmarkdown (or other) report.}
 }

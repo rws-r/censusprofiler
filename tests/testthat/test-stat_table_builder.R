@@ -3,6 +3,7 @@ test_that("stat_table_builder() works with master_list and summary_list", {
                           master_list = TRUE,
                           tableID="B02001",
                           variables = "B02001_003",
+                          censusVars = CV,
                           test=TRUE,
                           stateStart = 56)
  
@@ -13,6 +14,7 @@ test_that("stat_table_builder() works with master_list and summary_list", {
                           master_list = FALSE,
                           tableID="B02001",
                           variables = "B02001_003",
+                          censusVars = CV,
                           test=TRUE,
                           stateStart = 56)
   

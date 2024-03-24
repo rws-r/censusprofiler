@@ -23,9 +23,10 @@ Welcome to `censusprofiler`, a package designed to simplify regionalized census 
 
 All census calls are made via the US Census API. In order to use the Census API (and `censusprofiler`), you will need an API key, which you can obtain here (https://api.census.gov/data/key_signup.html), To save the API key as an environmental variable, run `set_api_key()`.
 
-This package was designed with the American Community Survey in mind. However, it is possible to obtain data from the Decennial census as well. Implementation of these additional data sources remains a TODO for the package.
+This package was designed to interface with the American Community Survey in mind. However, the US Census API provides multiple datasets. Implementation of these additional data sources remains a TODO for the package.
 
 # Workflows
+The basic censusprofile workflow revolves around `profiler()`, which makes data calls and parses the data into a census profile object. Users may select a variety of static geographies for calls (us, state, county, tract, block group), or use two methods for selecting a region of smaller geographies. The first, using 
 
 This vingette provides a basic introduction to two kinds of workflows used with censusprofiler: single, and batch profile creation. The basic logic of `censusprofiler` is as follows: *Initial Setup* Data Setup Variable Profile Setup
 

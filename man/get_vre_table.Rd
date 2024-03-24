@@ -13,7 +13,10 @@ get_vre_table(
   variableAgg = FALSE,
   state = NULL,
   county = NULL,
-  censusDataset = "acs5",
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
+  censusVars = NULL,
   verbose = FALSE,
   savePath = paste(getwd(), "/data/VRE/", sep = "")
 )
@@ -35,7 +38,13 @@ get_vre_table(
 
 \item{county}{ACS county (descriptive or FIPS) passed to function from capi().}
 
-\item{censusDataset}{Can select "acs1", "acsse" (supplemental est), "acs3", "acs5","flows" (migration flows)}
+\item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
+
+\item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
+
+\item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
+
+\item{censusVars}{Passthrough object to bypass get_census_variables}
 
 \item{verbose}{Logical parameter to display output}
 

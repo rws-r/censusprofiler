@@ -9,7 +9,12 @@
 #' should be accessed.
 #' @param allCols Parameter to display all columns during review of variables 
 #' for selection.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
 #' @param test Internal: logical parameter to specificy testing environment.
+#' @param verbose Logical parameter to specify verbose output.
 #'
 #' @return Vector with variable values stored.
 #' @export
@@ -21,7 +26,12 @@
 profile_helper <- function(tableID=NULL,
                            year=NULL,
                            allCols=FALSE,
-                           test=FALSE){
+                           dataset_main="acs",
+                           dataset_sub="acs5",
+                           dataset_last=NULL,
+                           censusVars=NULL,
+                           test=FALSE,
+                           verbose=FALSE){
   
   ## Deal with "no visible binding for global variable" error 
   censusDataset <- table_id <- name <- label <- 
@@ -30,11 +40,16 @@ profile_helper <- function(tableID=NULL,
   if(is.null(year)){
     stop("You need to include a year.")
   }
-
-  ACS <- acs_vars_builder(year,dataset=censusDataset)
-  ACS.VARS <- ACS[[1]]
-  ACS.GROUPS <- ACS[[2]]
-
+  
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
+  
 # if(addNumbering==TRUE){
   # if(exists("profile_variables")){
   #   message("It looks like you already have a profile_variables object created. \n Should we build on this? (yes) \n If (no), we'll start over. ")
@@ -42,17 +57,17 @@ profile_helper <- function(tableID=NULL,
   #          user_input <- readline(),
   #          user_input <- "no")
   #   if(user_input=="yes"){
-  #     profileVarsDF <- ACS.VARS %>% filter(table_id %in% tableID)
-  #     vbpv <- unique(as.vector(unlist(ACS.VARS %>% filter(name %in% profile_variables) %>% select(table_id))))
+  #     profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
+  #     vbpv <- unique(as.vector(unlist(CV.VARS %>% filter(name %in% profile_variables) %>% select(table_id))))
   #     profileVarsDF <- profileVarsDF %>% filter(!(table_id %in% vbpv))
   #     profileVariableList <- profileVarsDF
   #     tableID <- tableID[!(tableID %in% vbpv)]
   #    }else{
-  #     profileVarsDF <- ACS.VARS %>% filter(table_id %in% tableID)
+  #     profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
   #     profileVariableList <- NULL
   #    }
   # }else{
-    profileVarsDF <- ACS.VARS %>% filter(table_id %in% tableID)
+    profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
     profileVariableList <- NULL
   # }
     for(i in 1:length(tableID)){

@@ -31,9 +31,9 @@ mapper(
   dispWater = TRUE,
   dispPlaces = TRUE,
   dispRails = FALSE,
-  datatype = "acs",
-  dataset = "acs5",
-  varsObject = NULL,
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
   censusVars = NULL,
   verbose = FALSE,
   test = FALSE,
@@ -52,7 +52,7 @@ the single variable number to display.}
 \item{variableSummary}{Summary variable against which to calculate the
 percentage.}
 
-\item{year}{Year for get_acs.}
+\item{year}{Year for capi().}
 
 \item{geography}{Either "us","state","county","tract", or "block group".}
 
@@ -105,15 +105,13 @@ map.}
 \item{dispRails}{Logical: whether to display railroads on non-interactive
 map.}
 
-\item{datatype}{Specifies which database we are calling (e.g., "acs")}
+\item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
 
-\item{dataset}{To bypass get_acs and use a local dataset, include object
-here.}
+\item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
 
-\item{varsObject}{A dataframe containing census variables from the ACS or
-other dataset.}
+\item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
 
-\item{censusVars}{Looks for list of census variables.}
+\item{censusVars}{Passthrough object to bypass get_census_variables}
 
 \item{verbose}{Logical param to provide feedback.}
 

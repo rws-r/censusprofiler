@@ -1,5 +1,5 @@
 test_that("load_data() works", {
-  x <- load_data(load_acs = TRUE,
+  x <- load_data(load_censusVars = TRUE,
                  load_geos = TRUE,
                  load_stats = TRUE,
                  load_profile_compare = TRUE,
@@ -13,6 +13,6 @@ test_that("load_data() works", {
                  test=TRUE,
                  verbose=verbose)
   
-  expect_identical(names(x),c("ACS.VARS","ACS.GROUPS","geos","stats","stateCompare","usCompare"))
+  expect_identical(names(x),c("CV","geos","stats","stateCompare","usCompare"))
   
 })

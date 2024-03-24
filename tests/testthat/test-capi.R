@@ -4,8 +4,10 @@ test_that("capi() works", {
   # Positive returns, type 1-4 data -----------------------------------------
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL, 
                        tableID="B01001",   
                        variables=c("B01001_001","B01001_002"),
                        geography="tract",
@@ -24,8 +26,10 @@ test_that("capi() works", {
                        st=NULL),"data.frame")
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL,   
                        tableID="B01001",   
                        variables=c("B01001_001","B01001_002"),
                        geography="tract",
@@ -44,8 +48,10 @@ test_that("capi() works", {
                        st=NULL),"data.frame")
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL,  
                        tableID="B01001",   
                        variables=c("B01001_001","B01001_002"),
                        geography="tract",
@@ -64,8 +70,10 @@ test_that("capi() works", {
                        st=NULL),"data.frame")
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL,   
                        tableID="B01001",   
                        variables=c("B01001_001","B01001_002"),
                        geography="tract",
@@ -84,8 +92,10 @@ test_that("capi() works", {
                        st=NULL),"data.frame")
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL, 
                        tableID="B01001",   
                        variables=NULL,
                        geography="tract",
@@ -104,8 +114,10 @@ test_that("capi() works", {
                        st=NULL),"data.frame")
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL,   
                        tableID="B01001",   
                        variables=c(1:4),
                        geography="tract",
@@ -126,8 +138,10 @@ test_that("capi() works", {
   # Check geography types ---------------------------------------------------
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL,  
                        tableID="B01001",   
                        variables=c("B01001_001","B01001_002"),
                        geography="us",
@@ -146,8 +160,10 @@ test_that("capi() works", {
                        st=NULL),"data.frame")
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL,   
                        tableID="B01001",   
                        variables=c("B01001_001","B01001_002"),
                        geography="state",
@@ -166,8 +182,10 @@ test_that("capi() works", {
                        st=NULL),"data.frame")
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL,  
                        tableID="B01001",   
                        variables=c("B01001_001","B01001_002"),
                        geography="county",
@@ -186,8 +204,10 @@ test_that("capi() works", {
                        st=NULL),"data.frame")
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL,  
                        tableID="B01001",   
                        variables=c("B01001_001","B01001_002"),
                        geography="tract",
@@ -206,8 +226,10 @@ test_that("capi() works", {
                        st=NULL),"data.frame")
   
   expect_s3_class(capi(year=year,
-                       datatype="acs", 
-                       dataset="acs5",   
+                       dataset_main="acs",
+                       dataset_sub="acs5",
+                       dataset_last=NULL,
+                       censusVars=NULL,  
                        tableID="B01001",   
                        variables=c("B01001_001","B01001_002"),
                        geography="block group",
@@ -228,8 +250,10 @@ test_that("capi() works", {
   # Start negative tests ----------------------------------------------------
   
   expect_warning(capi(year=year,
-                      datatype="acs", 
-                      dataset="acs5",   
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=NULL,   
                       tableID="B01001",   
                       variables=c("B01001_001","B01001_002"),
                       geography="us",
@@ -248,8 +272,10 @@ test_that("capi() works", {
                       st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography="tract",
@@ -268,8 +294,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_warning(capi(year=year,
-                      datatype="acs", 
-                      dataset="acs5",   
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=NULL,   
                       tableID="B01001",   
                       variables=c("B01001_001","B01001_002"),
                       geography="us",
@@ -288,8 +316,10 @@ test_that("capi() works", {
                       st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,   
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography=NULL,
@@ -308,8 +338,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=NULL,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,   
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography=NULL,
@@ -328,8 +360,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset=NULL,   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,   
                     tableID=NULL,   
                     variables=NULL,
                     geography=NULL,
@@ -348,8 +382,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID=NULL,   
                     variables="all",
                     geography=NULL,
@@ -368,8 +404,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID="B01002",   
                     variables="B01002_002",
                     geography="tract",
@@ -388,8 +426,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,   
                     tableID="B01001",   
                     variables=c("B01001_001","B01001002"),
                     geography="tract",
@@ -408,8 +448,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,   
                     tableID=NULL,   
                     variables=c("B01001_001","B01001002"),
                     geography="tract",
@@ -428,8 +470,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,
                     tableID="B02001",   
                     variables=c("B01001_001","B01001_002"),
                     geography="tract",
@@ -448,8 +492,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,   
                     tableID="BS02001",   
                     variables=c("BS01001_001","BS01001_002"),
                     geography="tract",
@@ -468,8 +514,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID=NULL,   
                     variables=c("BS01001_001","BS01001_002"),
                     geography="tract",
@@ -488,8 +536,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID=NULL,   
                     variables=c("B01009_001","B01009_002"),
                     geography="tract",
@@ -508,8 +558,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID="B01001",   
                     variables=c("B01001_001","B02001_002"),
                     geography="tract",
@@ -528,8 +580,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,   
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography="tract",
@@ -548,8 +602,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography="tract",
@@ -568,8 +624,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography="tract",
@@ -588,8 +646,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,   
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography="tract",
@@ -608,8 +668,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography="tract",
@@ -628,8 +690,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography="tract",
@@ -648,8 +712,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography="tract",
@@ -668,8 +734,10 @@ test_that("capi() works", {
                     st=NULL))
   
   expect_error(capi(year=year,
-                    datatype="acs", 
-                    dataset="acs5",   
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=NULL,  
                     tableID="B01001",   
                     variables=c("B01001_001","B01001_002"),
                     geography="region",

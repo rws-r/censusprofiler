@@ -8,6 +8,7 @@ test_that("Utility: Create Comparison Data does comparison calls (state / US) on
                                     tableID=tableID,
                                     variables=variables,
                                     geosObject=geos,
+                                    censusVars=CV,
                                     test=TRUE,
                                     verbose=verbose)
   
@@ -16,6 +17,7 @@ test_that("Utility: Create Comparison Data does comparison calls (state / US) on
                                 tableID=tableID,
                                 variables=variables,
                                 geosObject=geos,
+                                censusVars=CV,
                                 test=TRUE,
                                 verbose=verbose)
   

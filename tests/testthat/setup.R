@@ -1,6 +1,6 @@
 
 ## Load data
-ACS <- readRDS(test_path("data","ACS.RDS"))
+CV <- readRDS(test_path("data","CV.RDS"))
 data <- readRDS(test_path("data","type_5_data.RDS"))
 geos <- readRDS(test_path("data","geos.RDS"))
 profile_tableID <- c("B01001","B01003")

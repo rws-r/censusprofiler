@@ -3,9 +3,6 @@
 #' An API interface for capturing and formatting census data.
 #'
 #' @param year Year for data call.
-#' @param datatype My main focus is on ACS data right now.
-#' @param dataset Can select "acs1", "acsse" (supplemental est), "acs3", "acs5","flows" (migration flows) 
-#' @param censusVars To pass a census variable object to speed up processing time.
 #' @param tableID Formerly known as varBase, or concept, or group: i.e., "B01001"
 #' @param variables A vector of variables for the call. If multiple select variables per tableID are desired,
 #' then variables should be constructed as a named list, with tableID as name, and sub list items as 
@@ -27,6 +24,10 @@
 #' @param consolidatedCity Input (abb. or FIPS) of consolidated city for search.
 #' @param region Input (abb. or FIPS) of region for search.
 #' @param division Input (abb. or FIPS) of division for search.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
 #' @param verbose Logical parameter to specify whether to produce verbose output.
 #' @param profile Logical parameter to specify whether to build profile.
 #' @param ggr Internal: to pass a get_geocode_radius() object to function.
@@ -72,9 +73,6 @@ capi <- function(year=NULL,
                  filterSummaryLevels="root",
                  filterByGeoType=NULL,
                  filterByGeoValue=NULL,
-                 datatype="acs", 
-                 dataset="acs5", 
-                 censusVars=NULL,
                  state=NULL,
                  county=NULL,
                  tract=NULL,
@@ -84,6 +82,10 @@ capi <- function(year=NULL,
                  consolidatedCity=NULL,
                  region=NULL,
                  division=NULL,
+                 dataset_main="acs",
+                 dataset_sub="acs5",
+                 dataset_last=NULL,
+                 censusVars=NULL,
                  verbose=FALSE,
                  profile=FALSE,
                  fast=FALSE,
@@ -138,8 +140,8 @@ capi <- function(year=NULL,
   if(is.null(year)){
     stop("!> You must provide a year parameter.")
   }
-  if(is.null(dataset)){
-    stop("!> You must provide a dataset. Options are `acs1`, `acs3`, `acsse`, and `acs5`.")
+  if(is.null(dataset_main)){
+    stop("!> You must provide a dataset. Options are `acs` and subsidiaries.")
   }
   if(geography %in% c("region","division","subminor civil division","place","consolidated city")){
     stop(paste("!> Unfortunately, we cannot provide results for `",geography,"` geographies at this time.",sep=""))
@@ -155,8 +157,15 @@ capi <- function(year=NULL,
 ## Data init ---------------------------------------------------------------
 
   # TODO Allow for caching of this data or not. Request permission.
-  #ACS <- acs_vars_builder(year=year,dataset=dataset)
-  CV <- get_census_variables(year=year,dataset_main = datatype, dataset_sub = dataset)
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
+  
   # Check for mode mismatch
   if(!is.null(tableID)){
     varcalccheck <- CV[[2]] %>% filter(table_id %in% tableID)
@@ -210,7 +219,7 @@ capi <- function(year=NULL,
      varlist <- variable_formatter(var=variables,
                                    tipc=tableID_pre.path,
                                    tableID=tableID,
-                                   ACS=CV)
+                                   censusVars=CV)
      varcount <- length(varlist)
      chunks <- 1 # Default chunk number (for sizing below)
      chunksize <- 48
@@ -221,7 +230,7 @@ capi <- function(year=NULL,
     for(i in 1:length(variables)){
       varlist <- c(varlist,variable_formatter(var=variables[i],
                                               tipc=tableID_pre.path,
-                                              ACS=CV))
+                                              censusVars=CV))
      }
     # For later reshaping, find total number of varlist, and break into chunks if > 50
     varcount <- length(varlist)
@@ -468,8 +477,8 @@ capi <- function(year=NULL,
 
   if(verbose==TRUE)message(paste(dur(st),"Building URL for GET call..."))
   url <- "http://api.census.gov/"
-  path <- paste("data/",year,"/",datatype,"/",dataset,sep="")
-  #varlist <- toString(varlist)
+  pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last,"variables")
+  path <- paste(pathElements,collapse="/")
 
   ## Loops to handle multiple counties
   datac <- NULL
@@ -639,11 +648,11 @@ capi <- function(year=NULL,
    
      if(verbose==TRUE)message(paste(dur(st),"Attaching variable/tableID labels..."))
     
-    ACSV <- CV[[1]] %>% mutate(labels = str_split_i(label,"!!",-1)) %>% 
+    CVV <- CV[[1]] %>% mutate(labels = str_split_i(label,"!!",-1)) %>% 
       dplyr::select(name,concept,labels,calculation,type,type_base,varID)
     
     # Create columnn for labels, for easy plotting.
-    data <- left_join(data,ACSV,by=c("variable"="name"))
+    data <- left_join(data,CVV,by=c("variable"="name"))
     
     if(verbose==TRUE)message(paste(dur(st),"Adding proportions.."))
     

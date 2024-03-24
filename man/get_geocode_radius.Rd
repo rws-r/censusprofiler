@@ -44,7 +44,7 @@ of tracts, block_groups or other geography from. Options are currently
 
 \item{geoidLookup}{Lookup geography by GEOID.}
 
-\item{geography}{Typically passed by other functions, used for get_acs
+\item{geography}{Typically passed by other functions, used for capi()
 request to specify geography. May be either "us","state", "county","tract", or "block group".}
 
 \item{radiusOnly}{Set to TRUE to return geocoded radius only, and not
@@ -71,9 +71,9 @@ and unit area.}
 \item{geosObject}{Optional geosObject object to speed up geo processing.}
 }
 \value{
-Returns either 1) a filtered sf object from get_acs() call; 2) an sf
+Returns either 1) a filtered sf object from capi() call; 2) an sf
 object with point coordinates; 3) an sf object with radius coordinates;
-or 4) a leaflet map with radius overlay.
+or 4) a tmap map with radius overlay.
 }
 \description{
 A function to geocode a supplied address, and then return a specified list
@@ -83,7 +83,7 @@ with various coordinate information.
 Designed to work with censusprofiler functions, and using OpenStreetMap /
 US Census data, supplied addresses are geocoded. Resulting coordinates are
 processed, including radius buffers. Parameters are returned to the
-originating function, where get_acs() is called. Alternatively, it can be used
+originating function, where capi() is called. Alternatively, it can be used
 to generate simply a geocoded address, or a geospatial radius.
 }
 \examples{

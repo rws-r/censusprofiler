@@ -6,17 +6,16 @@
 \usage{
 variable_builder(
   tableID = NULL,
-  censusVars = NULL,
   varStartNum = NULL,
   varEndNum = NULL,
   varSummaryNum = NULL,
-  varArray = NULL
+  varArray = NULL,
+  censusVars = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
 \item{tableID}{Variable base, prior to the underscore.}
-
-\item{censusVars}{Reference to variable table.}
 
 \item{varStartNum}{Start number of variables.}
 
@@ -25,6 +24,10 @@ variable_builder(
 \item{varSummaryNum}{Summary number.}
 
 \item{varArray}{A manual list if need be.}
+
+\item{censusVars}{Reference to variable table.}
+
+\item{verbose}{Logical parameter to specify additional output.}
 }
 \value{
 Returns either a vector, or a nested list.
@@ -35,7 +38,7 @@ analysis.
 }
 \examples{
 \dontrun{
-variable_builder(c("B01001","B01002"),censusVars=ACS.VARS,
+variable_builder(c("B01001","B01002"),censusVars=CV.VARS,
 varStartNum = c(1,1),varEndNum=c(3,3), varArray=NULL,varSummaryNum = c(1,1))
 }
 }

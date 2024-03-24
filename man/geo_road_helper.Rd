@@ -4,10 +4,12 @@
 \alias{geo_road_helper}
 \title{Geo: Road Helper}
 \usage{
-geo_road_helper(df)
+geo_road_helper(df = NULL, verbose = FALSE)
 }
 \arguments{
 \item{df}{The road sf object.}
+
+\item{verbose}{A logical parameter to specify verbose output.}
 }
 \value{
 A dataframe with "suffix" column added, for filtering use later.

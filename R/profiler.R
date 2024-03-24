@@ -4,8 +4,10 @@
 #'
 #' @param name User-supplied name for profile.
 #' @param year Year for data selection.
-#' @param datatype Internal: specify which census data type to select.
-#' @param dataset Internal: specify which census data source to select.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
 #' @param variables A vector of all variables requested.
 #' @param geography Geography specification: e.g.: tract, county, state.
 #' @param filterAddress An address input used to generate a radius around, for filtering data.
@@ -37,8 +39,10 @@
 #' }
 profiler <- function(name=NULL,
                      year=NULL,
-                     datatype="acs",
-                     dataset="acs5",   
+                     dataset_main="acs",
+                     dataset_sub="acs5",
+                     dataset_last=NULL,
+                     censusVars=NULL,  
                      tableID=NULL,   
                      variables=NULL, # Only need to include variable list.
                      geography=NULL,
@@ -55,10 +59,6 @@ profiler <- function(name=NULL,
                      metro=NULL,
                      ggr=NULL,
                      geosObject=NULL,
-                     # place=NULL,
-                     # consolidatedCity=NULL,
-                     # region=NULL,
-                     # division=NULL,
                      test=FALSE,
                      fast=FALSE, # For pseudo_tableID + stat table
                      verbose=FALSE,
@@ -75,7 +75,14 @@ profiler <- function(name=NULL,
     return(x)
   }
   
-  
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
 
 # Error checking ----------------------------------------------------------
 
@@ -131,7 +138,6 @@ profiler <- function(name=NULL,
   ## Execute capi() with supplied parameters.
     
     data <- capi(year=year,
-                 dataset=dataset,
                  tableID=tableID,
                  variables=variables,
                  geography=geography,
@@ -146,10 +152,7 @@ profiler <- function(name=NULL,
                  metro=metro,
                  tract=tract,
                  block_group=block_group,
-                 # place=place,
-                 # consolidatedCity=consolidatedCity,
-                 # region=region,
-                 # division=division,
+                 censusVars=CV,
                  fast=fast,
                  verbose=verbose,
                  profile=TRUE,

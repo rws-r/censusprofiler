@@ -17,9 +17,6 @@ capi(
   filterSummaryLevels = "root",
   filterByGeoType = NULL,
   filterByGeoValue = NULL,
-  datatype = "acs",
-  dataset = "acs5",
-  censusVars = NULL,
   state = NULL,
   county = NULL,
   tract = NULL,
@@ -29,6 +26,10 @@ capi(
   consolidatedCity = NULL,
   region = NULL,
   division = NULL,
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
+  censusVars = NULL,
   verbose = FALSE,
   profile = FALSE,
   fast = FALSE,
@@ -66,12 +67,6 @@ of tracts, block_groups or other geography from. Options are currently
 
 \item{filterByGeoValue}{A value to find object for filtering. Either NAME or GEOID.}
 
-\item{datatype}{My main focus is on ACS data right now.}
-
-\item{dataset}{Can select "acs1", "acsse" (supplemental est), "acs3", "acs5","flows" (migration flows)}
-
-\item{censusVars}{To pass a census variable object to speed up processing time.}
-
 \item{state}{Input (abb. or FIPS) of state for search.}
 
 \item{county}{Input (abb. or FIPS) of county for search.}
@@ -89,6 +84,14 @@ of tracts, block_groups or other geography from. Options are currently
 \item{region}{Input (abb. or FIPS) of region for search.}
 
 \item{division}{Input (abb. or FIPS) of division for search.}
+
+\item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
+
+\item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
+
+\item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
+
+\item{censusVars}{Passthrough object to bypass get_census_variables}
 
 \item{verbose}{Logical parameter to specify whether to produce verbose output.}
 

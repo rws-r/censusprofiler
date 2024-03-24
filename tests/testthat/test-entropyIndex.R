@@ -15,7 +15,7 @@ test_that("entropyIndex() works with a no data call", {
                      block_group=NULL,
                      year=2022,
                      return=FALSE,
-                     dataset="acs5",
+                     censusVars=CV,
                      verbose=verbose)
   
   expect_identical(names(EI),c("UnitEntropyScore","MaxEntropy","AreaSummary","AreaEntropyScore","AreaStandardizedEntropyScore","AreaEntropyIndex"))
@@ -39,7 +39,7 @@ test_that("entropyIndex() works with supplied data", {
                      block_group=NULL,
                      year=2022,
                      return=FALSE,
-                     dataset="acs5",
+                     censusVars=CV,
                      verbose=verbose)
   
   expect_identical(names(EI),c("UnitEntropyScore","MaxEntropy","AreaSummary","AreaEntropyScore","AreaStandardizedEntropyScore","AreaEntropyIndex"))
@@ -63,7 +63,7 @@ test_that("entropyIndex() works with supplied data, dissimilarity index", {
                      block_group=NULL,
                      year=2022,
                      return=FALSE,
-                     dataset="acs5",
+                     censusVars=CV,
                      verbose=verbose)
   
   expect_identical(names(EI),c("UnitEntropyScore","MaxEntropy","AreaSummary","AreaEntropyScore","AreaStandardizedEntropyScore","AreaEntropyIndex","DissimilarityIndex"))
@@ -88,7 +88,7 @@ test_that("entropyIndex() works with supplied data, dissimilarity index + isolat
                      block_group=NULL,
                      year=2022,
                      return=FALSE,
-                     dataset="acs5",
+                     censusVars=CV,
                      verbose=verbose)
   
   expect_identical(names(EI),c("UnitEntropyScore","MaxEntropy","AreaSummary","AreaEntropyScore","AreaStandardizedEntropyScore","AreaEntropyIndex","DissimilarityIndex","ExposureIndex","IsolationIndex"))

@@ -5,12 +5,16 @@
 \title{Load Data}
 \usage{
 load_data(
-  load_acs = FALSE,
+  load_censusVars = FALSE,
   load_geos = FALSE,
   load_stats = FALSE,
   load_profile_compare = FALSE,
   geography = "tract",
   geo_data = c("state", "county", "tract"),
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
+  censusVars = NULL,
   loadToGlobal = TRUE,
   year = 2021,
   tableID = NULL,
@@ -21,7 +25,7 @@ load_data(
 )
 }
 \arguments{
-\item{load_acs}{Logical param to capture ACS variables and concepts.}
+\item{load_censusVars}{Logical param to capture census variables and concepts.}
 
 \item{load_geos}{Logical param to capture geos object.}
 
@@ -32,6 +36,14 @@ load_data(
 \item{geography}{Default geography option for stat_table_builder.}
 
 \item{geo_data}{Default geography options for load_geos.}
+
+\item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
+
+\item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
+
+\item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
+
+\item{censusVars}{Passthrough object to bypass get_census_variables}
 
 \item{loadToGlobal}{Logical param to save to global environment.}
 

@@ -4,12 +4,16 @@
 #' a geos object, stats object, and/or geo profile comparison object. These are 
 #' created and then if selected, loaded into the global environment. 
 #'
-#' @param load_acs Logical param to capture ACS variables and concepts.
+#' @param load_censusVars Logical param to capture census variables and concepts.
 #' @param load_geos Logical param to capture geos object.
 #' @param load_stats Logical param to create stats_object.
 #' @param load_profile_compare Logical param to create geo profile comparison object.
 #' @param geography Default geography option for stat_table_builder.
 #' @param geo_data Default geography options for load_geos.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
 #' @param loadToGlobal Logical param to save to global environment.
 #' @param year Default year for data calls.
 #' @param tableID ProfileList object for stat_table_builder.
@@ -27,12 +31,16 @@
 #' load_data(load_acs=TRUE, load_geos=TRUE,load_stats=TRUE,
 #' variables=profile_variables,tableID=profile_tableID)
 #' }
-load_data <- function(load_acs = FALSE,
+load_data <- function(load_censusVars = FALSE,
                       load_geos = FALSE,
                       load_stats = FALSE,
                       load_profile_compare = FALSE,
                       geography = "tract",
                       geo_data = c("state","county","tract"),
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=NULL,
                       loadToGlobal = TRUE,
                       year = 2021,
                       tableID = NULL,
@@ -42,15 +50,20 @@ load_data <- function(load_acs = FALSE,
                       verbose=FALSE){
   
   ## Set all promised variables to NULL
-  ACS <- ACS.VARS <- ACS.GROUPS <- NULL
+  CV <- CV.VARS <- CV.GROUPS <- NULL
   
-  if(load_acs==TRUE){
-    x <- acs_vars_builder(year=year,return=TRUE,verbose=verbose)
-    if(loadToGlobal==TRUE){
-      ACS.VARS <<- x[[1]]
-      ACS.GROUPS <<- x[[2]]
+  if(load_censusVars==TRUE){
+    if(verbose==TRUE)message("Getting CV...")
+    if(is.null(censusVars)){ 
+      CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
     }else{
-      ACS <- x
+      CV <- censusVars
+    }
+    CV.VARS <- CV[[1]]
+    CV.GROUPS <- CV[[2]]
+    
+    if(loadToGlobal==TRUE){
+      CV <<- CV
     }
   }
   if(load_geos==TRUE){
@@ -63,7 +76,8 @@ load_data <- function(load_acs = FALSE,
   }
   if(load_stats==TRUE){
     ifelse(test==TRUE,ss <- 55,NULL)
-    z <- stat_table_builder(data = NULL,
+    z <- stat_table_builder(year=year,
+                            data = NULL,
                             master_list = TRUE,
                             summary_table = TRUE,
                             tableID = tableID,
@@ -113,13 +127,13 @@ load_data <- function(load_acs = FALSE,
   
   if(loadToGlobal==FALSE){
     dt <- list()
-    if(load_acs==TRUE)dt <- append(dt,list(ACS.VARS=ACS[[1]],ACS.GROUPS=ACS[[2]]))
+    if(load_censusVars==TRUE)dt <- append(dt,list(CV=CV))
     if(load_geos==TRUE)dt <- append(dt,list(geos=geos))
     if(load_stats==TRUE)dt <- append(dt,list(stats=profile_stats))
     if(load_profile_compare)dt <- append(dt,list(stateCompare=stateCompare,usCompare=usCompare))
     return(dt)
     on.exit(
-      if(load_acs==TRUE)rm(ACS),
+      if(load_acs==TRUE)rm(CV),
       if(load_geos==TRUE)rm(geos),
       if(load_stats==TRUE)rm(profile_stats))
       if(load_profile_compare==TRUE)rm(stateCompare,usCompare)

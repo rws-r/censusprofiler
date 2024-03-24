@@ -1,11 +1,12 @@
-## Original file / superceded 
 
 test_that("profiler() constructs a single tableID call properly", {
   ## Single tableID call 
   p1 <- profiler(name="TestProfile",
                  year=year,
-                 datatype="acs",
-                 dataset="acs5",   
+                 dataset_main="acs",
+                 dataset_sub="acs5",
+                 dataset_last=NULL,
+                 censusVars=CV,   
                  tableID="B02001",   
                  variables=NULL,
                  geography="tract",
@@ -35,8 +36,10 @@ test_that("profiler() constructs a single tableID call properly", {
 test_that("profiler() constructs a multi-tableID call properly", {
   p2 <- profiler(name="TestProfile",
                  year=year,
-                 datatype="acs",
-                 dataset="acs5",   
+                 dataset_main="acs",
+                 dataset_sub="acs5",
+                 dataset_last=NULL,
+                 censusVars=CV,  
                  tableID=c("B01001","B02001"),   
                  variables=NULL,
                  geography="tract",
@@ -65,8 +68,10 @@ test_that("profiler() constructs a multi-tableID call properly", {
 test_that("profiler() constructs an area (non radius) call properly", {
   p3 <- profiler(name="TestProfile",
                  year=year,
-                 datatype="acs",
-                 dataset="acs5",   
+                 dataset_main="acs",
+                 dataset_sub="acs5",
+                 dataset_last=NULL,
+                 censusVars=CV,   
                  tableID="B02001",   
                  variables=NULL,
                  geography="state",
@@ -95,8 +100,10 @@ test_that("profiler() constructs an area (non radius) call properly", {
 test_that("profiler() constructs an area (non radius) call properly (county)", {
   p4 <- profiler(name="TestProfile",
                  year=year,
-                 datatype="acs",
-                 dataset="acs5",   
+                 dataset_main="acs",
+                 dataset_sub="acs5",
+                 dataset_last=NULL,
+                 censusVars=CV,   
                  tableID="B02001",   
                  variables=NULL,
                  geography="county",
@@ -125,8 +132,10 @@ test_that("profiler() constructs an area (non radius) call properly (county)", {
 test_that("profiler() constructs an area (non radius) call properly (tract)", {
   p5 <- profiler(name="TestProfile",
                  year=year,
-                 datatype="acs",
-                 dataset="acs5",   
+                 dataset_main="acs",
+                 dataset_sub="acs5",
+                 dataset_last=NULL,
+                 censusVars=CV,  
                  tableID="B02001",   
                  variables=NULL,
                  geography="tract",

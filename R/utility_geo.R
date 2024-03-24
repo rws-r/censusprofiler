@@ -10,7 +10,7 @@
 #' Designed to work with censusprofiler functions, and using OpenStreetMap /
 #' US Census data, supplied addresses are geocoded. Resulting coordinates are
 #' processed, including radius buffers. Parameters are returned to the
-#' originating function, where get_acs() is called. Alternatively, it can be used
+#' originating function, where capi() is called. Alternatively, it can be used
 #' to generate simply a geocoded address, or a geospatial radius.
 #'
 #' @param filterAddress Address for geocoding. Should be in "Street, City, State Zip"
@@ -21,7 +21,7 @@
 #'   of tracts, block_groups or other geography from. Options are currently
 #'   "metro", "place","combined_statistical_areas". E.g., Find all tracts in Chicago (place).
 #' @param filterByGeoValue A value to find object for filtering. Either NAME or GEOID.   
-#' @param geography Typically passed by other functions, used for get_acs
+#' @param geography Typically passed by other functions, used for capi()
 #' request to specify geography. May be either "us","state", "county","tract", or "block group".
 #' @param radiusOnly Set to TRUE to return geocoded radius only, and not
 #' provide any additional ACS data requests.
@@ -40,9 +40,9 @@
 #' @param geoidLookup Lookup geography by GEOID.
 #' @param profile A profile data object.
 #'
-#' @return Returns either 1) a filtered sf object from get_acs() call; 2) an sf
+#' @return Returns either 1) a filtered sf object from capi() call; 2) an sf
 #' object with point coordinates; 3) an sf object with radius coordinates;
-#' or 4) a leaflet map with radius overlay.
+#' or 4) a tmap map with radius overlay.
 #'
 #' @importFrom tmaptools geocode_OSM
 #' @importFrom dplyr filter
@@ -87,7 +87,6 @@ get_geocode_radius <- function(filterAddress=NULL,
                                geoidLookup=NULL,
                                geography=NULL,
                                radiusOnly=FALSE,
-                               # mapRadiusOnly=FALSE,
                                geocodeOnly=FALSE,
                                fipsOnly=FALSE,
                                profile=FALSE,
@@ -482,6 +481,7 @@ get_geocode_radius <- function(filterAddress=NULL,
 #' dataframe with added suffix column. Can use this to filter later.
 #' 
 #' @param df The road sf object.
+#' @param verbose A logical parameter to specify verbose output.
 #'
 #' @return A dataframe with "suffix" column added, for filtering use later.
 #' 
@@ -493,9 +493,10 @@ get_geocode_radius <- function(filterAddress=NULL,
 #'   roads <- tigris::roads(state=geo$states,county = geo$counties,year=2021,filter_by=bbox)
 #'   roads <- geo_road_helper(roads)
 #'   }
-geo_road_helper <- function(df){
+geo_road_helper <- function(df=NULL,
+                            verbose=FALSE){
 
-  pb <- txtProgressBar(min = 1, max = nrow(df), style = 3)
+  if(verbose==TRUE)pb <- txtProgressBar(min = 1, max = nrow(df), style = 3)
   for(i in 1:nrow(df)){
     ## Strip away directional pre/suffix. Then capture the street suffix.
     strName <- df[i,]$FULLNAME
@@ -507,9 +508,9 @@ geo_road_helper <- function(df){
       sfx <- strName[max(length(strName))]
     }
     df[i,"suffix"]=sfx
-    setTxtProgressBar(pb, i)
+    if(verbose==TRUE)setTxtProgressBar(pb, i)
   }
-  close(pb)
+  if(verbose==TRUE)close(pb)
   return(df)
 }
 

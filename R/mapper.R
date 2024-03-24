@@ -22,7 +22,7 @@
 #'   the single variable number to display.
 #' @param variableSummary Summary variable against which to calculate the
 #'   percentage.
-#' @param year  Year for get_acs.
+#' @param year  Year for capi().
 #' @param geography Either "us","state","county","tract", or "block group".
 #' @param filterAddress Address for querying a set of geographies as a radius
 #'   around a location.
@@ -53,12 +53,10 @@
 #' @param dispPlaces Logical: whether to display places on non-interactive map.
 #' @param dispRails Logical: whether to display railroads on non-interactive
 #'   map.
-#' @param varsObject A dataframe containing census variables from the ACS or
-#'   other dataset.
-#' @param datatype Specifies which database we are calling (e.g., "acs")
-#' @param dataset To bypass get_acs and use a local dataset, include object
-#'   here.
-#' @param censusVars Looks for list of census variables.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
 #' @param verbose Logical param to provide feedback.
 #' @param test Internal: Logical param to bypass feedback and provide limited
 #'   data for testing.
@@ -70,8 +68,6 @@
 #'
 #' @export
 #'
-#' @importFrom tidycensus get_acs
-#' @importFrom tidycensus load_variables
 #' @import dplyr
 #' @importFrom dplyr filter
 #' @importFrom dplyr mutate
@@ -130,9 +126,9 @@ mapper <- function(mapDF=NULL,
                    dispWater=TRUE,
                    dispPlaces=TRUE,
                    dispRails=FALSE,
-                   datatype="acs",
-                   dataset="acs5",
-                   varsObject=NULL,
+                   dataset_main="acs",
+                   dataset_sub="acs5",
+                   dataset_last=NULL,
                    censusVars=NULL,
                    verbose=FALSE,
                    test=FALSE,
@@ -182,7 +178,7 @@ mapper <- function(mapDF=NULL,
   # }
   
   ## Check and format date
-  year <- dateInputCheck(year,dataset,verbose=verbose)
+  year <- dateInputCheck(year,dataset_sub,verbose=verbose)
 
   # Secure geosObjects
   if(is.null(geosObject)){
@@ -214,12 +210,14 @@ mapper <- function(mapDF=NULL,
   }
 
   ## Get census variables
-  if(verbose==TRUE)message("- mapper | Getting ACS vars...")
-  if(!is.null(varsObject)){
-    ACS <- varsObject
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
   }else{
-    ACS <- acs_vars_builder(year=year,dataset=dataset)  
+    CV <- censusVars
   }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
   
   ## If mapDF, process.
   if(!is.null(mapDF)){
@@ -289,8 +287,7 @@ mapper <- function(mapDF=NULL,
     if(is.null(mapDF)){
       if(verbose==TRUE)message("- mapper | Getting data from capi()...")
       mapDF <- capi(year=year,
-                    datatype=datatype,
-                    dataset=dataset,
+                    censusVars=CV,
                     tableID=tableID,
                     variables=c(variableSummary,variable),
                     geography=geography,

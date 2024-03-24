@@ -2,8 +2,10 @@ test_that("tabler() works", {
 
   # Test baseline pass: simple / type 1 ----------------------------
   expect_s3_class(tabler(data_object=data,
-                         datatype="acs",
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=CV, 
                          mode="simple",
                          tableID="B02001",
                          variables=NULL,
@@ -32,8 +34,10 @@ test_that("tabler() works", {
   
   #Test baseline pass: nosummary / type 2 ----------------------------
   expect_s3_class(tabler(data_object=data,
-                         datatype="acs",
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=CV,
                          mode="nosummary",
                          tableID="B02001",
                          variables=NULL,
@@ -62,8 +66,10 @@ test_that("tabler() works", {
   
   # Test baseline pass: summarizeinc / type 3 ----------------------------
   expect_s3_class(tabler(data_object=data,
-                         datatype="acs",
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=CV,
                          mode="summarizeinc",
                          tableID="B02001",
                          variables=NULL,
@@ -92,8 +98,10 @@ test_that("tabler() works", {
   
   # Test baseline pass: summarize / type 4 ----------------------------
   expect_s3_class(tabler(data_object=data,
-                         datatype="acs",
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=CV,
                          mode="summarize",
                          tableID="B02001",
                          variables=NULL,
@@ -122,8 +130,10 @@ test_that("tabler() works", {
   
   # Test baseline: filter address, no data-------------------------------------
   expect_s3_class(tabler(data_object=NULL,
-                         datatype="acs",
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=CV,
                          mode="summarize",
                          tableID="B02001",
                          variables=NULL,
@@ -153,8 +163,10 @@ test_that("tabler() works", {
   
   # Test baseline pass: parameter=sort ------------------------------------------------
   expect_s3_class(tabler(data_object=data,
-                         datatype="acs",
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=CV,
                          mode="simple",
                          tableID="B01001",
                          variables=NULL,
@@ -183,8 +195,10 @@ test_that("tabler() works", {
   
   # Test baseline pass: parameter=sort_bygroup ------------------------------------------------
   expect_s3_class(tabler(data_object=data,
-                         datatype="acs",
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=CV,
                          mode="simple",
                          tableID="B01001",
                          variables=NULL,
@@ -213,8 +227,10 @@ test_that("tabler() works", {
   
   # Test baseline pass: parameter=pctFilter ------------------------------------------------
   expect_s3_class(tabler(data_object=data,
-                         datatype="acs",
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=CV,
                          mode="simple",
                          tableID="B01001",
                          variables=NULL,
@@ -243,8 +259,10 @@ test_that("tabler() works", {
   
   # Test baseline pass: parameter= usCompare ------------------------------------------------
   expect_s3_class(tabler(data_object=data,
-                         datatype="acs",
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=CV,
                          mode="simple",
                          tableID="B01001",
                          variables=NULL,
@@ -273,8 +291,10 @@ test_that("tabler() works", {
   
   # Test baseline pass: parameter=stateCompare ------------------------------------------------
   expect_s3_class(tabler(data_object=data,
-                         datatype="acs",
-                         dataset="acs5",
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=CV,
                          mode="summarize",
                          tableID="B01001",
                          variables=NULL,
@@ -303,8 +323,10 @@ test_that("tabler() works", {
   
   # Test error: simple / type 2 ----------------------------
   expect_error(tabler(data_object=data$data$type2data,
-                      datatype="acs",
-                      dataset="acs5",
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=CV,
                       mode="simple",
                       tableID="B02001",
                       variables=NULL,
@@ -333,8 +355,10 @@ test_that("tabler() works", {
   
   # Test error: nosummary / type 1 ----------------------------
   expect_error(tabler(data_object=data$data$type1data,
-                      datatype="acs",
-                      dataset="acs5",
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=CV,
                       mode="nosummary",
                       tableID="B02001",
                       variables=NULL,
@@ -363,8 +387,10 @@ test_that("tabler() works", {
   
   # Test error: summarize / type 4 ----------------------------
   expect_error(tabler(data_object=data$data$type4data,
-                      datatype="acs",
-                      dataset="acs5",
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=CV,
                       mode="summarizeinc",
                       tableID="B02001",
                       variables=NULL,
@@ -393,8 +419,10 @@ test_that("tabler() works", {
   
   # Test error: summarizeinc / type 2 ----------------------------
   expect_error(tabler(data_object=data$data$type2data,
-                      datatype="acs",
-                      dataset="acs5",
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=CV,
                       mode="summarizeinc",
                       tableID="B02001",
                       variables=NULL,
@@ -424,8 +452,10 @@ test_that("tabler() works", {
   
   # Test error: invalid mode ------------------------------------------------
   expect_error(tabler(data_object=data,
-                      datatype="acs",
-                      dataset="acs5",
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=CV,
                       mode="womp",
                       tableID=NULL,
                       variables=NULL,
@@ -454,8 +484,10 @@ test_that("tabler() works", {
   
   # Test error: no tableID ----------------------------
   expect_error(tabler(data_object=multivars,
-                      datatype="acs",
-                      dataset="acs5",
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=CV,
                       mode="simple",
                       tableID=NULL,
                       variables=NULL,
@@ -484,8 +516,10 @@ test_that("tabler() works", {
   
   # Test error: multi tableID w/o specification ----------------------------
   expect_error(tabler(data_object=multivars,
-                      datatype="acs",
-                      dataset="acs5",
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=CV,
                       mode="nosummary",
                       tableID=NULL,
                       variables=NULL,
@@ -514,8 +548,10 @@ test_that("tabler() works", {
   
   # Test error: multi tableID w/o specification ----------------------------
   expect_error(tabler(data_object=multivars,
-                      datatype="acs",
-                      dataset="acs5",
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=CV,
                       mode="nosummary",
                       tableID=NULL,
                       variables=NULL,
