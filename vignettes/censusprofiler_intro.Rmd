@@ -14,9 +14,11 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup}
+```{r setup, echo=FALSE}
 library(censusprofiler)
-address <- address <- "60 W Walton St, Chicago, IL 60610"
+geos <- readRDS(file.path(getwd(),"geos.RDS",fsep="/"))
+statesCompare <- readRDS(file.path(getwd(),"statesCompare.RDS",fsep="/"))
+usCompare <- readRDS(file.path(getwd(),"usCompare.RDS",fsep="/"))
 ```
 
 Welcome to `censusprofiler`, a package designed to simplify regionalized census data capture. While `censusprofiler` can perform several functions, at its core, it takes a geographic point, draws a radius, and makes calls to the census api for geographical units around within that radius, and provides output that is more suited for presentation.
@@ -43,15 +45,16 @@ A profile object is a geographically-bounded data call on provided variables. Th
 
 Profile objects are lists with two elements: `info` and `data`. `Info` captures basic supplied information about the profile object, and `data` contains a list with the four datatypes described above.
 
-Let's build a simple profile object to evaluate racial composition of some census tracts in Chicago. We'll take as our address `r address` and run the following code:
+Let's build a simple profile object to evaluate racial composition of some census tracts in Chicago. We'll take as our address "60 W Walton St, Chicago, IL 60610" and run the following code:
 
-```{r message=FALSE}
+```{r message=FALSE, results=FALSE}
 profile <- profiler(name="Chicago Neighborhoods",
                     year=2022,
                     tableID = "B02001",
                     geography="tract",
                     filterAddress = "60 W Walton St, Chicago, IL 60610",
-                    filterRadius = 0.5)
+                    filterRadius = 0.5,
+                    geosObject = geos)
 ```
 
 This returns a list object:
@@ -79,26 +82,28 @@ These dataframes contain more information than supplied by the raw API call, in 
 print(names(profile$data$type1data))
 ```
 
-Table `df` is a straight dump of all returns of each geographical area, ungrouped. Note that data processing has taken place. For a pure return from the census API, use `tidycensus::get_acs()` or `censusprofiler::get_census_data(...,saveToVariable=TRUE)`.
+Column names are described below:
 
-```{r}
-print(head(profile$data$type1data))
-```
-
-Tables `dfCount` and `dfNoSummary` are structured differently in that they provide summary counts for the entire radius. That is, they combine counts for whatever geographic areas are specified and provide summary output.
-
-```{r}
-
-head(profile$data[[1]]$dfCount)
-```
-
-The only difference between `dfCount` and `dfNoSummary` is that the latter excludes summary variables to provide cleaner output of individual subvariable breakdowns for tables. You don't always want summary stats to show up when displaying the how subvariables compare to one another.
-
-```{r}
-head(profile$data[[1]]$dfNoSummary)
-```
-
-While the list format can be a little unwieldy, we have packaged it in this way for user-end flexibility. That is, so the user can make a single profile call, and have access to various data formats at hand.
+-   `table_id`: This is a grouping variable. On the Census website, it is referred to as "group". However, I have adopted the language of table. A table_id of B02001 holds all variables with that prefix (i.e., B02001_001, B02001_002, B02001_003, etc).
+-   `year`: The year fetched. For ACS data, it may be any year between 2009 and current year.
+-   `variable`: Dataframes list each individual variable with its associated values.
+-   `concept`: Concepts are short descriptions of their respective table_id.
+-   `label`: Labels are short descriptions of the individual variables, within that concept.
+-   `estimate`: Because we are primarily focused on the ACS, we use "estimate" rather than "value" or "total." The ACS uses sampling procedures to render estimates, based on the decennial census for each geographical area. (See `moe` below)
+-   `subtotal`: Subtotals are calculated on the basis of geographical units (or geoids). Because profile objects often include multiple tracts, or counties, it is helpful to see subtotals of table_ids x geographic unit. These are clearest in type 1/2 data. Total combined area tallies are found in type 3/4 data.
+-   `pct`: Calculated estimate percentages of subtotals, per geographic unit.
+-   `subtotal_by_type`: Variables sometimes include subvariables. For example, in table_id B02001, one option is "Two or More Races", consisting of two subvalues. The hierarchy is captured in column `type`, and `subtotals_by_type` and `pct_by_type` both calculate tallies and percentages with respect to these hierarchies, rather than on a flat basis.
+-   `pct_by_type`: See `subtotal_by_type`. Note: `pct` will show percent of estimates relative to subtotal, while pct_by_type will show percent of estimates relative to its parent variable.
+-   `moe`: Because ACS data is comprised of estimates, the API also returns the margin of error for each variable/geography value.
+-   `name`: The geographical unit captured by name.
+-   `geography`: The depth of geographical "resolution" (e.g., state, county, tract, block group).
+-   `state` / `county` / `tract` / `block group`: The FIPS code for each the larger geographic units containing the primary geographic unit. 
+-   `geoid`: A unique identifier for the geographic unit, comprised of nested FIPS codes (i.e., stateFIPS+countyFIPS+tractFIPS). 
+- `calculation`: Whether a simple count, or median.
+- `type`: A derived value identifying the variable type, or level. In the data returned by the Census API, this is denoted by label patterns. For example, in the ACS, the subtotal variable B02001_001 has the label "Estimate!!Total:", while the variable B02001_008 ("Two or more races") has the label "Estimate!!Total:!!Two or more races:". The subvariable B02001_009 ("Two races including Some other race") has the label "Estimate!!Total:!!Two or more races:!!Two races including Some other race". To ease in identification and manipulation of variables, these have been tagged as "root", "summary", and "level_1" respectively. 
+- `type_base`: Similar to `type`, `type_base` identifies type, but in a broader fashion: it simply identifies the root variable, and all other subordinate variables. 
+- `varID`: Sometimes it can be helpful to indicate the suffix of the variable. This is provided in simple numerical format.
+- `dt`: Identifier indicating what type of data this is (1-4). 
 
 ## Optimization
 
@@ -107,16 +112,51 @@ The `censusprofiler` logic may be optimized by preloading several data objects:
 -   census variables
 -   geography variable object
 
-These can be obtained by running `load_data(load_censusVariables=TRUE, load_geos=TRUE)`. The census variables object provides access to all variables available for the dataset queried (e.g., "acs5"), and is used for error-checking and dataframe formatting. The geography variable object reduces data calls for geographical functions by preloading the relevant shapefiles for the area queried. Both of these objects may be passed to `profiler()` and other functions.
+These can be obtained by running `load_data(load_censusVariables=TRUE, load_geos=TRUE)`. The census variables object provides access to all variables available for the dataset queried (e.g., "acs5"), and is used for error-checking and dataframe formatting. The geography variable object reduces data calls for geographical functions by preloading the relevant shapefiles for the area queried. Both of these objects may be passed to `profiler()` and other functions and speed up processing time immensely. 
 
 # Standalone Functions
 
 `censusprofiler` provides two additional functions which can be implemented as standalone utilities, or in a rmarkdown report.
 
-## displayTable()
+## tabler()
 
-To display data in an elegant table, call `displayTable()`. We rely on the `flextable` package for output. You will likely benefit more from creating your own table output. However, `displayTable()` is a standalone function, meaning that you can pass variables, an address, and radius to it, and generate a quick table on the requested information, without first generating a profile object. In short, it is a convenience function.
+To display data in a simple table, call tabler(). The function may be used with an existing profile object, or in a standalone manner. If standalone, tabler() uses profiler() to capture data in the background. Output is generated using the `flextable`. This is a convenience function with minimal customization, designed primarily to give quick output for reviewing results.
 
-## map_census_data()
+```{r}
+tabler(profile,
+       tableID = "B02001",
+       dispPerc = TRUE)
+```
 
-Additionally, we have employed the `tmap` package to provide mapping capacities to the data collected. `map_census_data()` is a standalone function, meaning you can pass a variable and address to it, and it will generate the map for that area, without first creating a profile object.
+One interesting benefit of tabler() is the ability to present comparison statistics. If you create comparison tables (using create_comparison_data()), you can pass these into tabler() to view how your geographic area statistics compare to statewide, or nationwide statistics. 
+
+```{r}
+tabler(profile,
+       tableID = "B02001",
+       dispPerc = TRUE,
+       stateCompare = statesCompare,
+       usCompare = usCompare)
+
+```
+
+## mapper()
+
+Additionally, we have employed the `tmap` package to provide mapping capacities to the data collected. This function, like tabler(), can be utilized with existing data, or in a standalone fashion. It provides several options for output, including a simple map of selected geographical units with or without a radius overlay, density maps, and proportion maps when profile object data is supplied. Additionally, because we use `tmap`, both static and interactive maps are available for output. 
+
+```{r}
+mapper(mapDF = profile,
+       geography = "tract",
+       geosObject = geos,
+       areaOnly = TRUE)
+```
+```
+
+```{r}
+mapper(mapDF = profile,
+       tableID = "B02001",
+       variable = 2,
+       geography = "tract",
+       dispPerc = TRUE,
+       geosObject = geos)
+```
+

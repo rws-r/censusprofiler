@@ -12,6 +12,7 @@ capi(
   filterAddress = NULL,
   filterRadius = NULL,
   ggr = NULL,
+  geosObject = NULL,
   mode = "table",
   filterSummary = FALSE,
   filterSummaryLevels = "root",
@@ -54,6 +55,8 @@ variables—either full ("B01001_001") or numeric (c(1:8)).}
 \item{filterRadius}{A numeric value specifying the radius in miles around the address.}
 
 \item{ggr}{Internal: to pass a get_geocode_radius() object to function.}
+
+\item{geosObject}{Optional, attach geos object to simplify geo processes.}
 
 \item{mode}{c("table","summarize","median")}
 

@@ -451,7 +451,6 @@ create_comparison_data <- function(
 #' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
 #' @param censusVars Passthrough object to bypass get_census_variables #' @param verbose Logical parameter to specify whether to produce verbose output.
 #' 
-#' @importFrom ggplot2 geom_point
 #'
 #' @return dataframe
 #' @export
@@ -2047,3 +2046,318 @@ set_api_key <- function(key=NULL,
       Sys.setenv("TEST_CENSUS_API_KEY" = key)
     }
   }
+
+# theme_censusprofiler --------------
+theme_censusprofiler <- function(x,...){
+  if (!inherits(x, "flextable")) {
+    stop(sprintf("Function `%s` supports only flextable objects.", 
+                 "theme_vanilla()"))
+  }
+  thick_b <- fp_border(width = 2, 
+                       color = "#2D2A26")
+  std_b <- fp_border(width = 1,
+                     color = "#857C71")
+  thin_b <- fp_border(width = .5,
+                      color = "#857C71")
+  x <- border_remove(x)
+  x <- font(x, fontname = "Open Sans", part = "all")
+  x <- fontsize(x, size = 9.5, part = "all")
+  x <- color(x, color = "#2D2A26", part="header")
+  x <- bg(x , bg="#998F82",part="header")
+  x <- hline(x, border = fp_border(width=.5,color="#857C71"), part = "all")
+  x <- border_outer(x, border=std_b, part="header")
+  x <- border_inner_h(x, border=thin_b,)
+  #x <- hline_top(x, border = thick_b, part = "header")
+  x <- hline_bottom(x, border = std_b, part = "header")
+  x <- hline_bottom(x, border = std_b, part = "body")
+  x <- bold(x = x, bold = TRUE, part = "header")
+  x <- padding(x, padding = 8, part="all")
+  x <- align_text_col(x, align = "left", header = TRUE)
+  x <- align_nottext_col(x, align = "right", header = TRUE)
+  x <- autofit(x)
+  fix_border_issues(x)
+}
+
+# load_data---------------------------
+#' Load Data
+#' 
+#' A convenience function that loads functional data, including ACS variables, 
+#' a geos object, stats object, and/or geo profile comparison object. These are 
+#' created and then if selected, loaded into the global environment. 
+#'
+#' @param load_censusVars Logical param to capture census variables and concepts.
+#' @param load_geos Logical param to capture geos object.
+#' @param load_stats Logical param to create stats_object.
+#' @param load_profile_compare Logical param to create geo profile comparison object.
+#' @param geography Default geography option for stat_table_builder.
+#' @param geo_data Default geography options for load_geos.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
+#' @param loadToGlobal Logical param to save to global environment.
+#' @param year Default year for data calls.
+#' @param tableID ProfileList object for stat_table_builder.
+#' @param variables Variable list for stat_table_builder.
+#' @param verbose Logical param to provide feedback.
+#' @param geosObject Optional geosObject to speed up processing time.
+#' @param test Internal logical parameter to specify testing envir.
+#'
+#' @return data.frame objects loaded into global environment.
+#' 
+#' @export 
+#'
+#' @examples
+#' \dontrun{
+#' load_data(load_acs=TRUE, load_geos=TRUE,load_stats=TRUE,
+#' variables=profile_variables,tableID=profile_tableID)
+#' }
+load_data <- function(load_censusVars = FALSE,
+                      load_geos = FALSE,
+                      load_stats = FALSE,
+                      load_profile_compare = FALSE,
+                      geography = "tract",
+                      geo_data = c("state","county","tract"),
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=NULL,
+                      loadToGlobal = FALSE,
+                      year = 2021,
+                      tableID = NULL,
+                      variables = NULL,
+                      geosObject=NULL,
+                      test=FALSE,
+                      verbose=FALSE){
+  
+  ## Set all promised variables to NULL
+  CV <- CV.VARS <- CV.GROUPS <- NULL
+  
+  if(load_censusVars==TRUE){
+    if(verbose==TRUE)message("Getting CV...")
+    if(is.null(censusVars)){ 
+      CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+    }else{
+      CV <- censusVars
+    }
+    
+    if(loadToGlobal==TRUE){
+      CV <<- CV
+    }
+  }
+  if(load_geos==TRUE){
+    y <- geo_var_builder(geography=geo_data,try="local",verbose=verbose)
+    if(loadToGlobal==TRUE){
+      geos <<- y
+    }else{
+      geos <- y
+    }
+  }
+  if(load_stats==TRUE){
+    ifelse(test==TRUE,ss <- 55,NULL)
+    z <- stat_table_builder(year=year,
+                            data = NULL,
+                            master_list = TRUE,
+                            summary_table = TRUE,
+                            tableID = tableID,
+                            variables = variables,
+                            geography = "tract",
+                            geosObject = geosObject,
+                            stateStart = ss,
+                            test=TRUE,
+                            verbose=verbose
+    )
+    
+    if(loadToGlobal==TRUE){
+      profile_stats <<- z
+    }else{
+      profile_stats <- z
+    }
+  }
+  
+  if(load_profile_compare==TRUE){
+    s <- create_comparison_data(geography="state",
+                                profileDataset = NULL,
+                                year=2021,
+                                variables = variables,
+                                tableID = tableID, 
+                                geosObject = geosObject,
+                                test=TRUE,
+                                verbose = verbose)
+    
+    u <- create_comparison_data(geography="us",
+                                profileDataset = NULL,
+                                year=2021,
+                                variables = variables,
+                                tableID = tableID, 
+                                geosObject = geosObject,
+                                test=TRUE,
+                                verbose = verbose)
+    
+    
+    if(loadToGlobal==TRUE){
+      stateCompare <<- s
+      usCompare <<- u
+    }else{
+      stateCompare <- s
+      usCompare <- u
+    }
+  }
+  
+  if(loadToGlobal==FALSE){
+    dt <- list()
+    if(load_censusVars==TRUE)dt <- append(dt,list(CV=CV))
+    if(load_geos==TRUE)dt <- append(dt,list(geos=geos))
+    if(load_stats==TRUE)dt <- append(dt,list(stats=profile_stats))
+    if(load_profile_compare)dt <- append(dt,list(stateCompare=stateCompare,usCompare=usCompare))
+    return(dt)
+    on.exit(
+      if(load_acs==TRUE)rm(CV),
+      if(load_geos==TRUE)rm(geos),
+      if(load_stats==TRUE)rm(profile_stats))
+    if(load_profile_compare==TRUE)rm(stateCompare,usCompare)
+  }
+  
+} 
+
+# profile_helper-------------------------
+
+#' Profile Helper
+#'
+#' A function designed to interactively create a vectorized list of selected
+#' variables to use for profiler() functionality. 
+#'
+#' @param year Year of call.
+#' @param tableID Vector with variables for inclusion.
+#' should be accessed.
+#' @param allCols Parameter to display all columns during review of variables 
+#' for selection.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
+#' @param test Internal: logical parameter to specificy testing environment.
+#' @param verbose Logical parameter to specify verbose output.
+#'
+#' @return Vector with variable values stored.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' profile_builder(tableID=tableID,addNumbering=TRUE)
+#' }
+profile_helper <- function(tableID=NULL,
+                           year=NULL,
+                           allCols=FALSE,
+                           dataset_main="acs",
+                           dataset_sub="acs5",
+                           dataset_last=NULL,
+                           censusVars=NULL,
+                           test=FALSE,
+                           verbose=FALSE){
+  
+  ## Deal with "no visible binding for global variable" error 
+  censusDataset <- table_id <- name <- label <- 
+    type <- NULL
+  
+  if(is.null(year)){
+    stop("You need to include a year.")
+  }
+  
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
+  
+  # if(addNumbering==TRUE){
+  # if(exists("profile_variables")){
+  #   message("It looks like you already have a profile_variables object created. \n Should we build on this? (yes) \n If (no), we'll start over. ")
+  #   ifelse(test==FALSE,
+  #          user_input <- readline(),
+  #          user_input <- "no")
+  #   if(user_input=="yes"){
+  #     profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
+  #     vbpv <- unique(as.vector(unlist(CV.VARS %>% filter(name %in% profile_variables) %>% select(table_id))))
+  #     profileVarsDF <- profileVarsDF %>% filter(!(table_id %in% vbpv))
+  #     profileVariableList <- profileVarsDF
+  #     tableID <- tableID[!(tableID %in% vbpv)]
+  #    }else{
+  #     profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
+  #     profileVariableList <- NULL
+  #    }
+  # }else{
+  profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
+  profileVariableList <- NULL
+  # }
+  for(i in 1:length(tableID)){
+    vb <- tableID[i]
+    dispVars <- profileVarsDF %>% filter(table_id==vb)
+    if(test==FALSE)message(cat("-----------\n table_id for review: ",unlist(unique(dispVars$concept)),"\n-----------\n"))
+    # Select columns; option to display all cols.
+    if(allCols==FALSE){
+      dispVars <- dispVars %>% select(name,label,type)
+    }
+    if(test==FALSE)print(dispVars,n=100)
+    ifelse(test==FALSE,
+           user_input <- readline("Which numbers do we want to keep? (`stop`,`all`,`type`,number array):"),
+           user_input <- "all")
+    if(user_input != 'stop'){
+      if(user_input=="type"){
+        user_input_b <- readline("Which type should we filter by? (array accepted)")
+        user_input_b <- unlist(strsplit(user_input_b,","))
+        # Check inputs
+        for(x in 1:length(user_input_b)){
+          if(user_input_b[x] %in% c("root","summary","level_1","level_2","level_3","level_4","other")==FALSE){
+            message(paste("Whoops, looks like ",user_input_b[x],"doesn't exist. Please start over and try again."))
+            #saveMe(test=test)
+            stop()
+          }
+        }
+        ui <- user_input_b
+        vC <- dispVars %>% filter(type %in% ui)
+        vC <- vC[["name"]]
+        profileVariableList <- c(profileVariableList,vC)
+        
+        
+      }else{
+        if(user_input=="all"){
+          ui <- c(1:nrow(dispVars))
+        }else{
+          ui <- eval(parse(text=paste("c(",user_input,")",sep="")))
+        }
+        vl <- NULL
+        for(v in 1:length(ui)){
+          vC <- paste(vb,"_",sprintf("%03d",ui[v]),sep="")
+          profileVariableList <- c(profileVariableList,vC)
+        }
+      }
+      
+    }else{
+      #saveMe(profileVariableList,test=test)
+      return(profileVariableList)
+    }
+    if(test==FALSE)message(cat(">> Variables added: ",profileVariableList))
+  }
+  ifelse(test = FALSE,
+         return(profileVariableList),
+         #checkSave(profileVariableList,test=test),
+         return(profileVariableList))
+  
+  # }else if(review==TRUE){
+  #   message("Parameter 'review' is unimplemented as of now.")
+  #   # #TODO Fix this.
+  #   # for(i in 1:length(tableID)){
+  #   #   print(capi("state",table_id=tableID[i],varStartNum = 1, year=2021,state="IL",
+  #   #                          plot = TRUE))
+  #   # 
+  #   #   user_input <- readline("Should I continue? (y/n)  ")
+  #   #   if(user_input != 'y') stop('Exiting since you did not press y')
+  #   # }
+  # }else{
+  # stop("You did not specify any arguments.")
+  # }
+}

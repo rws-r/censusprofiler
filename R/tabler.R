@@ -45,7 +45,6 @@
 #' @importFrom dplyr slice_max
 #' @importFrom dplyr desc
 #' @importFrom formattable percent
-#' @include theme_censusprofiler.R
 #'
 #' @return A flextable object.
 #' @export
@@ -55,6 +54,7 @@
 #' tabler(data_object=data,datatype="acs",dataset="acs5",mode="simple",
 #' tableID="B02001",variables=NULL,summaryLevels=1,)
 #'}
+
 tabler <- function(data_object=NULL,
                    mode="summarize",
                    tableID=NULL,

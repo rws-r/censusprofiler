@@ -79,7 +79,6 @@
 #' @importFrom sf st_coordinates
 #' @importFrom sf st_union
 #' @importFrom sf st_bbox
-#' @importFrom purrr map_chr
 #' @import tmap
 #' @import paletteer
 #'
