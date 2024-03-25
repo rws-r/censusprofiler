@@ -22,10 +22,10 @@ test_that("Utility: Create Comparison Data does comparison calls (state / US) on
                                 verbose=verbose)
   
   expect_s3_class(states,"data.frame")
-  expect_contains(names(states),c('table_id','year','variable','concept','labels','estimate','moe','subtotals','pct','tot_pop','tot_pop_pct','moe_pct','subtotals_by_type','pct_by_type','moe_pct_by_type','name','state','geoid','type_base','geography','calculation','type','varID','dt'))
+  expect_contains(names(states),c('table_id','year','variable','concept','labels','estimate','subtotal','pct','subtotal_by_type','pct_by_type','moe','name','geography','state','geoid','calculation','type','type_base','varID','dt'))
   expect_equal(length(unique(states$geoid)),1)
   expect_s3_class(us,"data.frame")
-  expect_contains(names(us),c('table_id','year','variable','concept','labels','estimate','moe','subtotals','pct','tot_pop','tot_pop_pct','moe_pct','subtotals_by_type','pct_by_type','moe_pct_by_type','name','us','geoid','type_base','geography','calculation','type','varID','dt'))
+  expect_contains(names(us),c('table_id','year','variable','concept','labels','estimate','subtotal','pct','subtotal_by_type','pct_by_type','moe','name','geography','geoid','calculation','type','type_base','varID','dt'))
   expect_equal(length(unique(us$geoid)),1)
   
 })

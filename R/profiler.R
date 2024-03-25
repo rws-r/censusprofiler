@@ -29,6 +29,7 @@
 #' @param st Internal parameter to provide timestamp consistency.
 #' @param fast Internal parameter for pseudo_tableID and stat table (capi())
 #' @param test Internal parameter for testing suite.
+#' @param simpleReturn Param to return raw data, not formatted.
 #' @param tableID Specification for concept, or group: e.g., "B01001"
 #'
 #' @return data.frame
@@ -59,6 +60,7 @@ profiler <- function(name=NULL,
                      metro=NULL,
                      ggr=NULL,
                      geosObject=NULL,
+                     simpleReturn=FALSE,
                      test=FALSE,
                      fast=FALSE, # For pseudo_tableID + stat table
                      verbose=FALSE,
@@ -108,7 +110,7 @@ profiler <- function(name=NULL,
                                   filterRadius = filterRadius,
                                   geography = geography,
                                   year = year,
-                                  fipsOnly = TRUE)
+                                  profile = TRUE)
       }
     }else{
       if(is.null(ggr)){
@@ -118,7 +120,7 @@ profiler <- function(name=NULL,
                                   geography = geography,
                                   state = state,
                                   year = year,
-                                  fipsOnly = TRUE)
+                                  profile = TRUE)
       }
     }
   }else{
@@ -156,20 +158,24 @@ profiler <- function(name=NULL,
                  fast=fast,
                  verbose=verbose,
                  profile=TRUE,
+                 simpleReturn = simpleReturn,
                  test=test,
                  st=st)
-  
-  info <- list(name = name,
-               address = filterAddress,
-               radius = filterRadius,
-               year = year,
-               coordinates = ggr$coordinates,
-               buffer = ggr$buffer,
-               states = ggr$states,
-               counties = ggr$counties)
-  
-  df <- list(info = info,
-             data = data)
+    if(simpleReturn==FALSE){ 
+      info <- list(name = name,
+                   address = filterAddress,
+                   radius = filterRadius,
+                   year = year,
+                   coordinates = ggr$coordinates,
+                   buffer = ggr$buffer,
+                   states = ggr$states,
+                   counties = ggr$counties)
+      
+      df <- list(info = info,
+                 data = data)
+    }else{
+      df <- data
+    }
   
   return(df)
 }

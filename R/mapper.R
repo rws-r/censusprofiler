@@ -136,7 +136,7 @@ mapper <- function(mapDF=NULL,
 ){
 
   ## Deal with "no visible binding for global variable" error 
-  estimate  <- tot_pop_pct <- value <- concept <- block_group <- GEOID <- NULL
+  estimate  <- pct <- value <- concept <- block_group <- GEOID <- NULL
   
   # Internal functions ------------------------------------------------------
 
@@ -325,7 +325,7 @@ mapper <- function(mapDF=NULL,
     if(verbose==TRUE)message(paste(dur(st),"Setting up mapDF with modifications..."))
     
     if(dispPerc==TRUE){
-      mapDF <- mapDF %>% mutate(value = as.numeric(tot_pop_pct))
+      mapDF <- mapDF %>% mutate(value = as.numeric(pct))
       mapDF <- mapDF %>% mutate(value_print = formattable::percent(value,digits=2))
     }else{
       mapDF <- mapDF %>% mutate(value = estimate)

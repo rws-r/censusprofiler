@@ -1,6 +1,6 @@
 
 # Similuate mapper() data preparation
-    spatial_mapDF <- spatial_mapDF %>% mutate(value = formattable::percent(as.numeric(tot_pop_pct)),digits=2)
+    spatial_mapDF <- spatial_mapDF %>% mutate(value = formattable::percent(as.numeric(pct)),digits=2)
     spatial_mapDF <- spatial_mapDF %>% mutate(value_print = formattable::percent(value,digits=2))
 
 

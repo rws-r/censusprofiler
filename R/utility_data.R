@@ -68,12 +68,12 @@ get_census_variables <- function(year=NULL,
                                varID=gsub(".*_","",name),
                                calculation = ifelse(str_detect(concept,"(?i)MEDIAN"),"median","count"),
                                type = case_when(
-                                 str_count(label,"!!") == 1 ~ "root",
-                                 str_count(label,"!!") == 2 ~ "summary",
-                                 str_count(label,"!!") == 3 ~ "level_1",
-                                 str_count(label,"!!") == 4 ~ "level_2",
-                                 str_count(label,"!!") == 5 ~ "level_3",
-                                 str_count(label,"!!") == 6 ~ "level_4",
+                                 stringr::str_count(label,"!!") == 1 ~ "root",
+                                 stringr::str_count(label,"!!") == 2 ~ "summary",
+                                 stringr::str_count(label,"!!") == 3 ~ "level_1",
+                                 stringr::str_count(label,"!!") == 4 ~ "level_2",
+                                 stringr::str_count(label,"!!") == 5 ~ "level_3",
+                                 stringr::str_count(label,"!!") == 6 ~ "level_4",
                                  .default = "other"
                                ),
                                type_base = case_when(
@@ -467,7 +467,7 @@ entropyIndex <- function(data=NULL,
                          dissimilarityValueB=NULL, # for exposure/isolation index, selecting minority group
                          geography="tract",
                          wideCols=NULL,
-                         longCol="tot_pop_pct",
+                         longCol="pct",
                          filterSummary=FALSE,
                          filterSummaryLevels="root", # default
                          #entropyType="EI", # c("EI","MGEI")
@@ -488,8 +488,8 @@ entropyIndex <- function(data=NULL,
                          censusVars=NULL,
                          verbose=FALSE){
   
-  table_id <- variable <- concept <- estimate <- tot_pop_pct <- 
-    pct_by_type <- tot_pop <- tot_pop_pct <- name <- geoid <- type <- 
+  table_id <- variable <- concept <- estimate <- pct <- 
+    pct_by_type <- subtotal <- pct <- name <- geoid <- type <- 
     est_total <- sub_total <- NULL
   
   if(verbose==TRUE)message("Getting CV...")
@@ -551,16 +551,16 @@ entropyIndex <- function(data=NULL,
   ## Data Cleaning and preparation
   if(verbose==TRUE)message("   - EI: cleaning data...")
   if(dataType!="vector"){
-    data <- data %>% ungroup() %>% select(table_id,variable,year,concept,labels,estimate,tot_pop,tot_pop_pct,name,geoid,geography,type)
+    data <- data %>% ungroup() %>% select(table_id,variable,year,concept,labels,estimate,subtotal,pct,name,geoid,geography,type)
     data <- data %>% filter(table_id==tableID)
 
     if(!is.null(variables)){
       data <- data %>% filter(variable %in% variables) 
     }
-    data <- data %>% filter(!is.na(tot_pop_pct))
+    data <- data %>% filter(!is.na(pct))
 
     # Create empty entropy table to populate.
-    entropyTableNames <- c("table_id","year","concept","name","geoid","geography","tot_pop_pct","entropyIndex","multiGroupEntropyIndex")
+    entropyTableNames <- c("table_id","year","concept","name","geoid","geography","pct","entropyIndex","multiGroupEntropyIndex")
     entropyTable <- data.frame(matrix(ncol = length(names(entropyTableNames)),nrow = 0))
     colnames(entropyTable) <- names(entropyTableNames)
   }
@@ -568,7 +568,7 @@ entropyIndex <- function(data=NULL,
   ## Get whole-area entropy estimates / entropy index
   # Combine populations
   area <- data %>% group_by(labels,variable) %>% summarize(est_total = sum(estimate),
-                                                  sub_total = sum(tot_pop),
+                                                  sub_total = sum(subtotal),
                                                   areaPct = est_total/sub_total)
   
   areaPopulation <- unique(area$sub_total)
@@ -670,7 +670,7 @@ entropyIndex <- function(data=NULL,
           }
           dvd <- d %>% filter(variable==dv)
           ti <- dvd$estimate
-          pi <- dvd$tot_pop_pct
+          pi <- dvd$pct
           To <- areaPopulation
           ad <- area %>% filter(variable==dv)
           P <- ad$areaPct
@@ -692,7 +692,7 @@ entropyIndex <- function(data=NULL,
           eidB <- d %>% filter(variable==dvb)
           xi <- eidA$estimate
           yi <- eidB$estimate
-          ti <- eidA$tot_pop
+          ti <- eidA$subtotal
           To <- areaPopulation
           aeid <- area %>% filter(variable==dv)
           X <- aeid$est_total
@@ -708,7 +708,7 @@ entropyIndex <- function(data=NULL,
         }
   
         # Remove pct col and get summary row
-        d <- d %>% select(table_id,year,concept,name,geoid,geography,tot_pop)
+        d <- d %>% select(table_id,year,concept,name,geoid,geography,subtotal)
         d <- unique(d)
         d <- d %>% mutate(maxEntropy = maxEntropy, entropyScore = ES, standardizedEntropyScore = SES)
         entropyTable <- rbind(entropyTable,d)
@@ -733,7 +733,7 @@ entropyIndex <- function(data=NULL,
 
     EI <- 0
     for(et in 1:nrow(entropyTable)){
-      t <- entropyTable[[et,"tot_pop"]]
+      t <- entropyTable[[et,"subtotal"]]
       Ei <- entropyTable[[et,"entropyScore"]]
       To <- areaPopulation
       #print(paste(t,"(",AES,"-",Ei,") / (",AES,"*",To,")"))
@@ -1593,23 +1593,40 @@ type_data <- function(dataset,
      check <- 6
      df <- dataset                                     
     }else{
-      stop("!> Requires a censusprofiler object. Create one using profiler().")
+      stop("!> Unknown format. Requires a censusprofiler object. Create one using profiler().")
     }
     ## If not profile, check to see if this is a single valid censusprofiler data object.
-  }else if(all(class(dataset)==c("grouped_df",
-                                 "tbl_df",
-                                 "tbl",
-                                 "data.frame"))==TRUE && 
-           all(c("table_id",
-                 "varID",
-                 "dt") %in% names(dataset))){
-    check <- unique(dataset$dt)
-    ##ADDTEST 
-    if(length(check)>1)stop("!> Error in data check. Multiple values in dt column.")
-    df <- dataset 
-  }else{  
-    stop("!> Requires a censusprofiler object. Create one using profiler().")
+  }else if(length(class(dataset))==3){
+    if(all(class(dataset)==c("tbl_df",
+                          "tbl",
+                          "data.frame"))==TRUE && 
+      all(c("table_id",
+            "varID",
+            "dt") %in% names(dataset))){
+              check <- unique(dataset$dt)
+              if(length(check)>1)stop("!> Error in data check. Multiple values in dt column.")
+              df <- dataset 
+            }else{  
+              stop("!> Unknown datatype. Requires a well-formed censusprofiler object. Create one using profiler().")
+            }
+  }else if(length(class(dataset))==4){
+    if(all(class(dataset)==c("grouped_df",
+                             "tbl_df",
+                             "tbl",
+                             "data.frame"))==TRUE && 
+       all(c("table_id",
+             "varID",
+             "dt") %in% names(dataset))){
+      check <- unique(dataset$dt)
+      if(length(check)>1)stop("!> Error in data check. Multiple values in dt column.")
+      df <- dataset 
+    }else{  
+      stop("!> Unknown datatype. Requires a well-formed censusprofiler object. Create one using profiler().")
+    }
+  }else{
+    stop("!> Unknown format / data. Requires a well-formed censusprofiler object. Create one using profiler().")
   }
+   
   if(return==TRUE){
     return(df)
   }else{

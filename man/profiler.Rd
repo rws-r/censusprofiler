@@ -27,6 +27,7 @@ profiler(
   metro = NULL,
   ggr = NULL,
   geosObject = NULL,
+  simpleReturn = FALSE,
   test = FALSE,
   fast = FALSE,
   verbose = FALSE,
@@ -79,6 +80,8 @@ of tracts, block_groups or other geography from. Options are currently
 \item{ggr}{Internal: to pass a get_geocode_radius() object to function.}
 
 \item{geosObject}{Optional, attach geos object to simplify geo processes.}
+
+\item{simpleReturn}{Param to return raw data, not formatted.}
 
 \item{test}{Internal parameter for testing suite.}
 

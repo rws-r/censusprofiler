@@ -15,7 +15,7 @@ load_data(
   dataset_sub = "acs5",
   dataset_last = NULL,
   censusVars = NULL,
-  loadToGlobal = TRUE,
+  loadToGlobal = FALSE,
   year = 2021,
   tableID = NULL,
   variables = NULL,

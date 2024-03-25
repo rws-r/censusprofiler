@@ -41,7 +41,7 @@ load_data <- function(load_censusVars = FALSE,
                       dataset_sub="acs5",
                       dataset_last=NULL,
                       censusVars=NULL,
-                      loadToGlobal = TRUE,
+                      loadToGlobal = FALSE,
                       year = 2021,
                       tableID = NULL,
                       variables = NULL,
@@ -59,8 +59,6 @@ load_data <- function(load_censusVars = FALSE,
     }else{
       CV <- censusVars
     }
-    CV.VARS <- CV[[1]]
-    CV.GROUPS <- CV[[2]]
     
     if(loadToGlobal==TRUE){
       CV <<- CV

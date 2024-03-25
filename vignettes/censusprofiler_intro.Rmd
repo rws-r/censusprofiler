@@ -1,0 +1,122 @@
+---
+title: "censusprofiler_intro"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{censusprofiler_intro}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(censusprofiler)
+address <- address <- "60 W Walton St, Chicago, IL 60610"
+```
+
+Welcome to `censusprofiler`, a package designed to simplify regionalized census data capture. While `censusprofiler` can perform several functions, at its core, it takes a geographic point, draws a radius, and makes calls to the census api for geographical units around within that radius, and provides output that is more suited for presentation.
+
+All census calls are made via the US Census API. In order to use the Census API (and `censusprofiler`), you will need an API key, which you can obtain here (<https://api.census.gov/data/key_signup.html>), To save the API key as an environmental variable, run `set_api_key()`.
+
+This package was designed to interface with the American Community Survey in mind. However, the US Census API provides multiple datasets. Implementation of these additional data sources remains a TODO for the package.
+
+# Workflows
+
+The basic censusprofile workflow revolves around `profiler()`, which makes data calls and parses the data into a census profile object. Users may select a variety of static geographies for calls (us, state, county, tract, block group), or use two additional methods for selecting a collection of smaller geographies (see below).
+
+Censusprofiler logic is as follows:
+
+profiler -\> geographic processing -\> census API call -\> data processing and formatting -\> data return (profile object)
+
+The profile object is a `list` with four data-types, pragmatically named `type1data`, `type2data`, `type3data`, and `type4data`. Type 1 data is a simple dataframe containing every entry by variable and geography. Type 2 data replicates Type 1 data, but removes the summary variable from the dataframe (typically with a \_001 suffix). Type 3 data provides aggregate values for the entire geographic area requested. Type 4 data is aggregate, with the summary variable removed.
+
+It is also possible to get an unformatted dataset by using the `simpleReturn` parameter set to `TRUE`.
+
+## Single Profile Creation
+
+A profile object is a geographically-bounded data call on provided variables. This geographical boundary may be obtained in three ways: as a static geographical unit (e.g., one or more counties), by supplying an address and radius in miles, or by capturing smaller geographies inside a larger one (e.g., all tracts inside a metropolitan area).
+
+Profile objects are lists with two elements: `info` and `data`. `Info` captures basic supplied information about the profile object, and `data` contains a list with the four datatypes described above.
+
+Let's build a simple profile object to evaluate racial composition of some census tracts in Chicago. We'll take as our address `r address` and run the following code:
+
+```{r message=FALSE}
+profile <- profiler(name="Chicago Neighborhoods",
+                    year=2022,
+                    tableID = "B02001",
+                    geography="tract",
+                    filterAddress = "60 W Walton St, Chicago, IL 60610",
+                    filterRadius = 0.5)
+```
+
+This returns a list object:
+
+```{r}
+print(names(profile))
+```
+
+The first list item (`info`) contains supplied and deduced geographic details about the entity around which the profile is built.
+
+```{r}
+print(names(profile$info))
+print(profile$info)
+```
+
+The second list item (`data`) contains the four data types described above.
+
+```{r}
+print(names(profile$data))
+```
+
+These dataframes contain more information than supplied by the raw API call, in an effort to simplify the data acquisition process, to allow you to focus more on using the data.
+
+```{r}
+print(names(profile$data$type1data))
+```
+
+Table `df` is a straight dump of all returns of each geographical area, ungrouped. Note that data processing has taken place. For a pure return from the census API, use `tidycensus::get_acs()` or `censusprofiler::get_census_data(...,saveToVariable=TRUE)`.
+
+```{r}
+print(head(profile$data$type1data))
+```
+
+Tables `dfCount` and `dfNoSummary` are structured differently in that they provide summary counts for the entire radius. That is, they combine counts for whatever geographic areas are specified and provide summary output.
+
+```{r}
+
+head(profile$data[[1]]$dfCount)
+```
+
+The only difference between `dfCount` and `dfNoSummary` is that the latter excludes summary variables to provide cleaner output of individual subvariable breakdowns for tables. You don't always want summary stats to show up when displaying the how subvariables compare to one another.
+
+```{r}
+head(profile$data[[1]]$dfNoSummary)
+```
+
+While the list format can be a little unwieldy, we have packaged it in this way for user-end flexibility. That is, so the user can make a single profile call, and have access to various data formats at hand.
+
+## Optimization
+
+The `censusprofiler` logic may be optimized by preloading several data objects:
+
+-   census variables
+-   geography variable object
+
+These can be obtained by running `load_data(load_censusVariables=TRUE, load_geos=TRUE)`. The census variables object provides access to all variables available for the dataset queried (e.g., "acs5"), and is used for error-checking and dataframe formatting. The geography variable object reduces data calls for geographical functions by preloading the relevant shapefiles for the area queried. Both of these objects may be passed to `profiler()` and other functions.
+
+# Standalone Functions
+
+`censusprofiler` provides two additional functions which can be implemented as standalone utilities, or in a rmarkdown report.
+
+## displayTable()
+
+To display data in an elegant table, call `displayTable()`. We rely on the `flextable` package for output. You will likely benefit more from creating your own table output. However, `displayTable()` is a standalone function, meaning that you can pass variables, an address, and radius to it, and generate a quick table on the requested information, without first generating a profile object. In short, it is a convenience function.
+
+## map_census_data()
+
+Additionally, we have employed the `tmap` package to provide mapping capacities to the data collected. `map_census_data()` is a standalone function, meaning you can pass a variable and address to it, and it will generate the map for that area, without first creating a profile object.

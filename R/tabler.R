@@ -89,7 +89,7 @@ tabler <- function(data_object=NULL,
   ## To avoid "no visible binding for global variable" error
   estimate <- calculation <- pct <- us_profile <- us_comp <- 
     geo_states <- states_profile <- state_comp <- table_id <- 
-    variable <- NULL
+    variable <- info <- NULL
   
 # Internal functions ------------------------------------------------------
   
@@ -168,6 +168,7 @@ tabler <- function(data_object=NULL,
   if(mode=="summarize"){
     if(check==5){
       df <- df$data$type4data
+      info <- data_object$info
     }else if(check==6){
       df <- df$type4data
     }else if(check==4){
@@ -183,6 +184,7 @@ tabler <- function(data_object=NULL,
   }else if(mode=="summarizeinc"){
       if(check==5){
         df <- df$data$type3data
+        info <- data_object$info
       }else if(check==6){
         df <- df$type3data
       }else if(check==3){
@@ -198,6 +200,7 @@ tabler <- function(data_object=NULL,
   }else if(mode=="simple"){
     if(check==5){
       df <- df$data$type1data
+      info <- data_object$info
     }else if(check==6){
       df <- df$type1data
     }else if(check==1){
@@ -213,6 +216,7 @@ tabler <- function(data_object=NULL,
   }else if(mode=="nosummary"){
     if(check==5){
       df <- df$data$type2data
+      info <- data_object$info
     }else if(check==6){
       df <- df$type2data
     }else if(check==2){
@@ -380,10 +384,12 @@ tabler <- function(data_object=NULL,
       sf <- state
     }else if("info" %in% names(df)){
       if("states" %in% names(df$info)){ 
-        sf <- df %>% ungroup() %>% df$info$states
+        sf <- df$info$states
       }else{
         sf <- 99999
       }
+    }else if(!is.null(info)){
+      sf <- info$states
     }else if(nrow(unique(df %>% ungroup() %>% select(state)))==1){
       sf <- unique(df %>% ungroup() %>% select(state))
     }else{

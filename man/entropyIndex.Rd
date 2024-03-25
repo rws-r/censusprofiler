@@ -11,7 +11,7 @@ entropyIndex(
   dissimilarityValueB = NULL,
   geography = "tract",
   wideCols = NULL,
-  longCol = "tot_pop_pct",
+  longCol = "pct",
   filterSummary = FALSE,
   filterSummaryLevels = "root",
   tableID = NULL,

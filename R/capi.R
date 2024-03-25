@@ -31,6 +31,7 @@
 #' @param verbose Logical parameter to specify whether to produce verbose output.
 #' @param profile Logical parameter to specify whether to build profile.
 #' @param ggr Internal: to pass a get_geocode_radius() object to function.
+#' @param geosObject Optional, attach geos object to simplify geo processes.
 #' @param filterSummary Logical parameter to specify whether to filter out summary levels (typically _001 and therefore "root").
 #' @param filterSummaryLevels Explicit description of lowest type denoting summary level. Also excludes lower levels.
 #' @param fast Internal parameter for pseudo_tableID and stat table
@@ -45,6 +46,7 @@
 #' @importFrom stringr str_starts
 #' @importFrom stringr str_detect
 #' @importFrom stringr str_split_i
+#' @importFrom stringr str_count
 #'
 #' @examples \dontrun{
 #' Basic call
@@ -68,6 +70,7 @@ capi <- function(year=NULL,
                  filterAddress=NULL,
                  filterRadius=NULL,
                  ggr=NULL,
+                 geosObject=NULL,
                  mode="table",  
                  filterSummary=FALSE,
                  filterSummaryLevels="root",
@@ -94,11 +97,11 @@ capi <- function(year=NULL,
                  st=NULL){
 
   estimate <- moe <- vartype <- value <- name <- geoid <- NAME <-
-    tot_pop <- tot_pop_pct <- `block group` <- 
+    subtotal <- pct <- `block group` <- 
     variable <- label <- table_id <- calculation <- concept <- 
     type <- subtotals <- varID <- pct <- moe_pct <- 
     data_type_1 <- data_type_2 <- data_type_3 <- data_type_4 <- 
-    type_base <- subtotals_by_type <- pct_by_type <- moe_pct_by_type <-  
+    type_base <- subtotal_by_type <- pct_by_type <- moe_pct_by_type <-  
     TRACTCE <- COUNTYFP <- NULL
 
 # Init --------------------------------------------------------------------
@@ -367,14 +370,17 @@ capi <- function(year=NULL,
   ### Get tracts and modify counties if cross-county tracts ------------------
    if(!is.null(tract)){
      if(verbose==TRUE)message(paste(dur(st),"Checking and formatting tract as code..."))
-     geos <- geo_var_builder(geography="tract",
-                             try="local",
-                             state=state,
-                             county=county,
-                             geosObject=NULL,
-                             verbose=FALSE,
-                             test=FALSE)
-     tracts_filt <- geos$geo_tracts %>% filter(TRACTCE %in% tract)
+     if(is.null(geosObject)){
+       geosObject <- geo_var_builder(geography="tract",
+                               try="local",
+                               state=state,
+                               county=county,
+                               geosObject=NULL,
+                               verbose=FALSE,
+                               test=FALSE)
+     }
+     
+     tracts_filt <- geosObject$geo_tracts %>% filter(TRACTCE %in% tract)
      new_counties <- unique(tracts_filt$COUNTYFP)
      tract_pack <- list()
      for(i in 1:length(new_counties)){
@@ -388,13 +394,14 @@ capi <- function(year=NULL,
   ### Get geography filters if address and radius or geo type is supplied. ---------------
    if(!is.null(filterAddress) | !is.null(filterByGeoType)){
      if(!is.null(filterAddress)){ 
-       if(verbose==TRUE)message(paste(dur(st),"Filtering geos by address and radius..."))
+       if(verbose==TRUE)message(paste(dur(st),"Filtering geosObject by address and radius..."))
        
        if(is.null(ggr)){
          if(verbose==TRUE)message(paste(dur(st),"Finding geo area by radius..."))
          ggr <- get_geocode_radius(filterAddress = filterAddress,
                                    filterRadius = filterRadius,
                                    geography = geography,
+                                   geosObject = geosObject,
                                    year = year,
                                    fipsOnly = TRUE)
        }
@@ -405,6 +412,7 @@ capi <- function(year=NULL,
                                    filterByGeoValue = filterByGeoValue,
                                    geography = geography,
                                    state = state,
+                                   geosObject = geosObject,
                                    year = year,
                                    fipsOnly = TRUE)
        }
@@ -600,106 +608,96 @@ capi <- function(year=NULL,
              -888888888,
              -999999999)
     
+    ### Initial data processing --------------------------
+    if(verbose==TRUE)message(paste(dur(st),"Initial data processing..."))
+    if(geography=="block group"){
+      data <- data %>% dplyr::rename(block_group = `block group`)
+    }
+    if(geography=="state"){
+      data <- data %>% dplyr::mutate(geoid = paste(state,sep=""))
+    }else if(geography=="county"){
+      data <- data %>% dplyr::mutate(geoid = paste(state,county,sep=""))
+    }else if(geography=="tract"){
+      data <- data %>% dplyr::mutate(geoid = paste(state,county,tract,sep=""))
+    }else if(geography=="block group"){
+      data <- data %>% dplyr::mutate(geoid = paste(state,county,tract,block_group,sep=""))
+    }else{
+      data <- data %>% dplyr::mutate(geoid = NA)
+    }
+
+    ### If filterAddress and filterByGeoType, perform data filtering now-------
+    if(verbose==TRUE)message("Filtering data...")
+    if((!is.null(filterAddress) | !is.null(filterByGeoType)) && (geography=="tract") || geography=="block group"){
+        data <- data[data$geoid %in% ggr$geoid,]
+    }
+    
     data$value <- as.numeric(data$value)
-    data <- data %>% mutate(vartype = ifelse(stringr::str_sub(data$variable,-1,-1)=="E","estimate","moe"))
-    data <- data %>% mutate(variable=stringr::str_sub(data$variable,1,-2))
+    data <- data %>% dplyr::mutate(vartype = ifelse(stringr::str_sub(data$variable,-1,-1)=="E","estimate","moe"))
+    data <- data %>% dplyr::mutate(variable=stringr::str_sub(data$variable,1,-2))
     data <- data %>% tidyr::pivot_wider(names_from = vartype,values_from = value)
     data$estimate <- as.numeric(data$estimate)
     data$moe <- as.numeric(data$moe)
-    data <- data %>% mutate(moe = ifelse(moe %in% nas,NA,moe))
-
-    if(verbose==TRUE)message(paste(dur(st),"Adding geography..."))
+    data <- data %>% dplyr::mutate(moe = ifelse(moe %in% nas,NA,moe))
     
-    if(geography=="block group"){
-      data <- data %>% rename(block_group = `block group`)
-    }
-    
-    if(geography=="state"){
-      data <- data %>% mutate(geoid = paste(state,sep=""))
-    }else if(geography=="county"){
-      data <- data %>% mutate(geoid = paste(state,county,sep=""))
-    }else if(geography=="tract"){
-      data <- data %>% mutate(geoid = paste(state,county,tract,sep=""))
-    }else if(geography=="block group"){
-      data <- data %>% mutate(geoid = paste(state,county,tract,block_group,sep=""))
-    }else{
-      data <- data %>% mutate(geoid = NA)
-    }
-    
-    ## For filterAddress and filterByGeoType, perform data filtering now,
-    if(verbose==TRUE)message("Filtering data...")
-    if((!is.null(filterAddress) | !is.null(filterByGeoType)) && (geography=="tract") || geography=="block group"){
-       data <- data %>% filter(data$geoid %in% ggr$geoid)  
-    }
-    
+    ### Add tableID--------------------------
     if(verbose==TRUE)message(paste(dur(st),"Adding tableID..."))
+    tableID <- pseudo_tableID(data$variable,fast=fast,test=test,verbose=verbose)
+    data <- data %>% dplyr::mutate(table_id = tableID)
     
-#    if(!is.null(tableID)){
-#      data <- data %>% dplyr::mutate(table_id = pseudo_tableID)
-#    }else{
-      tableID <- pseudo_tableID(data$variable,fast=fast,test=test,verbose=verbose)
-      data <- data %>% dplyr::mutate(table_id = tableID)
-#     }
+    ### Add Variable--------------------------
+    if(verbose==TRUE)message(paste(dur(st),"Adding variable..."))
     data <- data %>% dplyr::rename(name = NAME)
-    
     data <- data %>% dplyr::arrange(name,variable)
     
-    ## Label attachment --------------------------------------------------------
-   
-     if(verbose==TRUE)message(paste(dur(st),"Attaching variable/tableID labels..."))
-    
-    CVV <- CV[[1]] %>% mutate(labels = str_split_i(label,"!!",-1)) %>% 
-      dplyr::select(name,concept,labels,calculation,type,type_base,varID)
-    
-    # Create columnn for labels, for easy plotting.
-    data <- left_join(data,CVV,by=c("variable"="name"))
-    
-    if(verbose==TRUE)message(paste(dur(st),"Adding proportions.."))
-    
-    # Add proportions relative to table_id, geoid, and type.
-    data <- data %>% dplyr::mutate(geography=geography)
-   data <- data %>% dplyr::group_by(table_id,geoid,type_base) %>% mutate(subtotals=sum(estimate))
-    
-    data <- data %>% dplyr::group_by(table_id,geoid,type_base) %>% mutate(subtotals=sum(estimate))
-    data <- data %>% dplyr::mutate(pct = estimate/subtotals)
-    data <- data %>% dplyr::mutate(moe_pct = moe/estimate)
-    data <- data %>% dplyr::ungroup()
-      data <- data %>% dplyr::group_by(table_id,geoid) %>% mutate(tot_pop=max(estimate))
-    data <- data %>% dplyr::mutate(tot_pop_pct = estimate/tot_pop)
-    data <- data %>% dplyr::ungroup()
-    data <- data %>% dplyr::group_by(table_id,geoid,type) %>% mutate(subtotals_by_type=sum(estimate))
-    data <- data %>% dplyr::mutate(pct_by_type = estimate/subtotals_by_type)
-    data <- data %>% dplyr::mutate(moe_pct_by_type = moe/estimate)
+    ### Add Year + relocate variable-------------------------- 
+    if(verbose==TRUE)message(paste(dur(st),"Adding year + relocating variable..."))
     data <- data %>% dplyr::mutate(year=year)
-
-    if(verbose==TRUE)message(paste(dur(st),"Relocating columns..."))
-
-    # Rearrange columns to make it more readable.
-    data <- data %>% dplyr::relocate(table_id) %>% 
-      dplyr::relocate(year,.after=table_id) %>% 
-      dplyr::relocate(variable,.after=year) %>% 
-      dplyr::relocate(concept,.after=variable) %>% 
-      dplyr::relocate(labels,.after=concept) %>% 
-      dplyr::relocate(estimate,.after=labels) %>% 
-      dplyr::relocate(geography,.after=estimate) %>% 
-      dplyr::relocate(moe,.after=geography) %>% 
-      dplyr::relocate(subtotals,.after=moe) %>% 
-      dplyr::relocate(pct,.after=subtotals) %>% 
-      dplyr::relocate(tot_pop,.after=pct) %>% 
-      dplyr::relocate(tot_pop_pct,.after=tot_pop) %>% 
-      dplyr::relocate(moe_pct,.after=tot_pop_pct) %>% 
-      dplyr::relocate(subtotals_by_type,.after=moe_pct) %>% 
-      dplyr::relocate(pct_by_type,.after=subtotals_by_type) %>% 
-      dplyr::relocate(moe_pct_by_type,.after=pct_by_type)
+    data <- data %>% dplyr::relocate(variable, .after = year)
     
-    ##TODO Make this one function for all processing
-    relocation_fun <- function(data){
-      data <- data %>% dplyr::relocate(calculation,.after="geography") %>% 
-        dplyr::relocate(type,.after=calculation) %>% 
-        dplyr::relocate(varID,.after=type) 
+    ### Add Labels + Concept ---------------------------------
+    if(verbose==TRUE)message(paste(dur(st),"Attaching variable/tableID labels..."))
+    CVV <- CV[[1]] %>% dplyr::mutate(labels = str_split_i(label,"!!",-1))
+    CVV1 <- CVV %>% dplyr::select(name,concept,labels,calculation,type,type_base,varID)
+   # CVV2 <- CVV %>% dplyr::select(name,calculation,type,type_base,varID)
+    data <- left_join(data,CVV1,by=c("variable"="name"))
+
+    ### Add Subtotals + Proportions ---------------------
+    if(verbose==TRUE)message(paste(dur(st),"Adding subtotals + proportions..."))
+    data <- data %>% dplyr::relocate(estimate,.after=labels)
+    data <- data %>% dplyr::group_by(table_id,geoid) %>% 
+      dplyr::mutate(subtotal=max(estimate),
+                    pct = estimate/subtotal) %>% 
+      dplyr::ungroup()
+    
+    data <- data %>% dplyr::group_by(table_id,geoid,type) %>% 
+      dplyr::mutate(subtotal_by_type=sum(estimate),
+                    pct_by_type = estimate/subtotal_by_type) %>% 
+      dplyr::ungroup()
+    
+    data <- data %>% dplyr::relocate(moe,.after=pct_by_type)
+    
+    ### Add Geographical Data ----------------
+    if(verbose==TRUE)message(paste(dur(st),"Adding geography..."))
+    data <- data %>% dplyr::relocate(name,.after=moe)
+    data <- data %>% dplyr::mutate(geography=geography)
+    if("state" %in% names(data))data <- data %>% dplyr::relocate(state,.after=geography)
+    if("county" %in% names(data))data <- data %>% dplyr::relocate(county,.after=state)
+    if("tract" %in% names(data))data <- data %>% dplyr::relocate(tract,.after=county)
+    if("block_group" %in% names(data))data <- data %>% dplyr::relocate(block_group,.after=tract)
+    if("block_group" %in% names(data)){
+      data <- data %>% dplyr::relocate(geoid, .after=block_group)
+    }else if("tract" %in% names(data)){
+      data <- data %>% dplyr::relocate(geoid, .after=tract)
+    }else if("county" %in% names(data)){
+      data <- data %>% dplyr::relocate(geoid, .after=county)
+    }else if("state" %in% names(data)){
+      data <- data %>% dplyr::relocate(geoid, .after=state)
+    }else{
+      data <- data %>% dplyr::relocate(geoid, .after=geography)
     }
     
-    data <- relocation_fun(data)
+    data <- data %>% dplyr::relocate(calculation,type,type_base,varID,.after=geoid)
+
     
     if(verbose==TRUE)message(paste(dur(st),"Creating type 1 data..."))
     data_type_1 <- data
