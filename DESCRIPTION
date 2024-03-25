@@ -1,24 +1,20 @@
 Package: censusprofiler
 Type: Package
 Title: censusprofiler
-Version: 0.2
-Date: 2024-3-23
+Version: 0.21.1
+Date: 2024-3-25
 Author: RW Stevenson
 Maintainer: RW Stevenson <thebobstevenson@protonmail.com>
-Imports: httr,tidyr,dplyr, tidycensus, sf, stringr, tigris, units, tmap, tmaptools,officer,flextable,formattable,jsonlite,paletteer,tibble,purrr,ggplot2,data.table
+Imports: httr,tidyr,dplyr, sf, stringr, tigris, units, tmap, tmaptools,officer,flextable,formattable,jsonlite,paletteer,tibble,purrr,ggplot2,data.table
 Depends: R (>= 3.5.0)
-Description: Package censusprofiler works with US census data utilizing package tidycensus. These functions provide tidy output and mapping of data, including filtering and radius options, allowing for cleaner analysis of raw data provided. It is designed primarily with the ACS in mind, though it can and should be modified to work with decennial and PUMS data.
+Description: Package censusprofiler is designed to simplify regionalized census data capture. While censusprofiler can perform several functions, at its core, it takes a geographic point, draws a radius, and makes calls to the census api for geographical units around within that radius, and provides output that is more suited for presentation. All census calls are made via the US Census API. This package was designed to interface with the American Community Survey in mind. However, the US Census API provides multiple datasets. Implementation of these additional data sources remains a TODO for the package.
 License: GPL (>= 2)
 RoxygenNote: 7.3.1
 Encoding: UTF-8
 Collate: 
     'capi.R'
-    'load_data.R'
-    'map_locations.R'
     'mapper.R'
-    'profile_helper.R'
     'profiler.R'
-    'theme_censusprofiler.R'
     'tabler.R'
     'utility_data.R'
     'utility_geo.R'
