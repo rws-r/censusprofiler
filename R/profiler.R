@@ -170,6 +170,12 @@ profiler <- function(name=NULL,
                    buffer = ggr$buffer,
                    states = ggr$states,
                    counties = ggr$counties)
+      if(geography=="tract"){
+        info <- append(info,list(tracts = ggr$tracts))
+      }
+      if(geography=="block group"){
+        info <- append(info,list(tracts=ggr$tracts,block_groups=ggr$block_groups))
+      }
       
       df <- list(info = info,
                  data = data)

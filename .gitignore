@@ -5,6 +5,7 @@
 .Ruserdata
 .DS_Store
 tests/testthat/data/.DS_Store
+tests/.DS_Store
 /tests/testthat/data/
 TODO
 inst/doc

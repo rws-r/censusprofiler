@@ -224,7 +224,12 @@ mapper <- function(mapDF=NULL,
       ## Get GGR or set GGR variables for regions.
     if(type_data(mapDF,return = FALSE) == 5){
       # If profile object is given, supply correct data.
-      ggr <- mapDF$info
+      ggr <- get_geocode_radius(filterAddress=mapDF$info$address,
+                                filterRadius=mapDF$info$radius,
+                                geography = geography,
+                                coords = mapDF$info$coordinates,
+                                geosObject = geosObject,
+                                verbose = verbose)
       mapDF <- mapDF$data$type1data
     }else{
       if(type_data(mapDF,return = FALSE) != 1){
@@ -279,10 +284,9 @@ mapper <- function(mapDF=NULL,
     ggr <- list(states = state,
                 counties = county)
   }
-
-  ## Get, check data based on functions (data or area). Ignore if radiusOnly or areaOnly are set.
-  if(radiusOnly==FALSE && areaOnly==FALSE){
-    ## Obviously, if mapDF is included, ignore capi() as well.
+  
+  if(isFALSE(radiusOnly) & isFALSE(areaOnly)){
+    ## Obviously, if mapDF is included, ignore capi().
     if(is.null(mapDF)){
       if(verbose==TRUE)message("- mapper | Getting data from capi()...")
       mapDF <- capi(year=year,
@@ -292,7 +296,7 @@ mapper <- function(mapDF=NULL,
                     geography=geography,
                     filterAddress=filterAddress,
                     filterRadius=filterRadius,
-                    ggr=NULL,
+                    ggr=ggr,
                     state=state,
                     county=county,
                     tract=tract,
@@ -308,17 +312,16 @@ mapper <- function(mapDF=NULL,
                             county=county,
                             geosObject = geosObject,
                             verbose=verbose)
-  
+    
     ## See if mapDF is fully-formed with ggr. If not, append ggr.
     if(!("df" %in% names(mapDF))){
       ggr <- append(ggr,list(df = mapDF))
     }
   }else{
-    # If we're not running capi() (areaOnly, radiusOnly), then rely solely on ggr for map data.
+    ## If our mapDF is for an areaOnly or radiusOnly call, use the supplied
+    ## ggr$df object, rather than mapDF.
     mapDF <- ggr$df
   }
-
-
 # Prepare data ------------------------------------------------------------
     if(radiusOnly==FALSE & areaOnly==FALSE){ 
     if(verbose==TRUE)message(paste(dur(st),"Setting up mapDF with modifications..."))
@@ -340,9 +343,16 @@ mapper <- function(mapDF=NULL,
       mapDF[i,'name_clean'] <- (unlist(stringr::str_split(md[i,'name'],";"))[1])
     }
   }else{
-    md <- st_drop_geometry(mapDF)
-    for(i in 1:nrow(md)){
+    ## If we are passing only filter address, etc. but no mapDF, use ggr object.
+    ## Otherwise, use mapDF.
+    if(is.null(mapDF)){
+      mapDF <- ggr$df
       mapDF <- mapDF %>% mutate(name_clean = GEOID)
+    }else{
+      md <- sf::st_drop_geometry(mapDF)
+      for(i in 1:nrow(md)){
+        mapDF <- mapDF %>% mutate(name_clean = GEOID)
+      }
     }
   }
 
@@ -361,7 +371,7 @@ mapper <- function(mapDF=NULL,
     mapDF <- mapDF %>% filter(!is.na(value))
     
   }else{
-    dfLAb = "Radius Area"
+    dfLAb = "Selected Map Area"
   }
   
 
