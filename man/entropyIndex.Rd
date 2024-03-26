@@ -78,7 +78,9 @@ group. Numeric value corresponding to variable.}
 
 \item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
 
-\item{censusVars}{Passthrough object to bypass get_census_variables #' @param verbose Logical parameter to specify whether to produce verbose output.}
+\item{censusVars}{Passthrough object to bypass get_census_variables #'}
+
+\item{verbose}{Logical parameter to specify whether to produce verbose output.}
 }
 \value{
 dataframe

@@ -19,17 +19,18 @@ mapper(
   state = NULL,
   geoidLookup = NULL,
   dispPerc = FALSE,
-  LegendTitle = "Census Tracts",
-  MapTitle = "Selected Census Tracts",
+  LegendTitle = NULL,
+  MapTitle = NULL,
   radiusOnly = FALSE,
   areaOnly = FALSE,
-  alpha = 0.3,
+  alpha = 0.5,
   interactive = FALSE,
   geosObject = NULL,
   markers = NULL,
   dispRoads = TRUE,
   dispWater = TRUE,
   dispPlaces = TRUE,
+  road_resolution = 1,
   dispRails = FALSE,
   dataset_main = "acs",
   dataset_sub = "acs5",
@@ -101,6 +102,11 @@ rails. Intended to speed up repeated uses of mapper, as in RMD files.}
 map.}
 
 \item{dispPlaces}{Logical: whether to display places on non-interactive map.}
+
+\item{road_resolution}{Possible values: c(1,2,3,4). Value of 1 displays all roads
+and names; value of 2 shows all roads, but only potentially major road names; 
+value of 3 shows all roads and no names; value of 4 shows and names only 
+potentially major roads; value of 5 shows only potential major roads and no names.}
 
 \item{dispRails}{Logical: whether to display railroads on non-interactive
 map.}

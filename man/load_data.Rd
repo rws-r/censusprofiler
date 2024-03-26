@@ -69,7 +69,7 @@ created and then if selected, loaded into the global environment.
 }
 \examples{
 \dontrun{
-load_data(load_acs=TRUE, load_geos=TRUE,load_stats=TRUE,
+load_data(load_censusVars=TRUE, load_geos=TRUE,load_stats=TRUE,
 variables=profile_variables,tableID=profile_tableID)
 }
 }

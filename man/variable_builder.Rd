@@ -10,6 +10,10 @@ variable_builder(
   varEndNum = NULL,
   varSummaryNum = NULL,
   varArray = NULL,
+  year = NULL,
+  dataset_main = NULL,
+  dataset_sub = NULL,
+  dataset_last = NULL,
   censusVars = NULL,
   verbose = FALSE
 )
@@ -24,6 +28,14 @@ variable_builder(
 \item{varSummaryNum}{Summary number.}
 
 \item{varArray}{A manual list if need be.}
+
+\item{year}{Year for variable draw}
+
+\item{dataset_main}{Main dataset parameter (e.g., 'acs' or 'dec')}
+
+\item{dataset_sub}{Secondary dataset parameter (e.g., 'acs5')}
+
+\item{dataset_last}{Tertiary dataset parameter (e.g., 'cprofile' or 'subject')}
 
 \item{censusVars}{Reference to variable table.}
 

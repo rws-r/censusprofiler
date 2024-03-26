@@ -28,6 +28,9 @@ get_census_variables <- function(year=NULL,
                                  directory=FALSE,
                                  verbose=FALSE
 ){
+  
+  dt <- name <- concept <- NULL
+  
   if(directory==FALSE){ 
     url <- "http://api.census.gov"
     pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last,"variables")
@@ -449,7 +452,8 @@ create_comparison_data <- function(
 #' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
 #' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
 #' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
-#' @param censusVars Passthrough object to bypass get_census_variables #' @param verbose Logical parameter to specify whether to produce verbose output.
+#' @param censusVars Passthrough object to bypass get_census_variables #' 
+#' @param verbose Logical parameter to specify whether to produce verbose output.
 #' 
 #'
 #' @return dataframe
@@ -1646,6 +1650,10 @@ type_data <- function(dataset,
 #' @param varEndNum End number of variables.
 #' @param varSummaryNum Summary number.
 #' @param varArray A manual list if need be.
+#' @param year Year for variable draw
+#' @param dataset_main Main dataset parameter (e.g., 'acs' or 'dec')
+#' @param dataset_sub Secondary dataset parameter (e.g., 'acs5')
+#' @param dataset_last Tertiary dataset parameter (e.g., 'cprofile' or 'subject')
 #' @param verbose Logical parameter to specify additional output.
 #'
 #' @return Returns either a vector, or a nested list.
@@ -1661,6 +1669,10 @@ variable_builder <- function(tableID=NULL,
                              varEndNum=NULL,
                              varSummaryNum=NULL,
                              varArray=NULL,
+                             year=NULL,
+                             dataset_main=NULL,
+                             dataset_sub=NULL,
+                             dataset_last=NULL,
                              censusVars=NULL,
                              verbose=FALSE){
   
@@ -2109,7 +2121,7 @@ theme_censusprofiler <- function(x,...){
 #'
 #' @examples
 #' \dontrun{
-#' load_data(load_acs=TRUE, load_geos=TRUE,load_stats=TRUE,
+#' load_data(load_censusVars=TRUE, load_geos=TRUE,load_stats=TRUE,
 #' variables=profile_variables,tableID=profile_tableID)
 #' }
 load_data <- function(load_censusVars = FALSE,
@@ -2212,7 +2224,7 @@ load_data <- function(load_censusVars = FALSE,
     if(load_profile_compare)dt <- append(dt,list(stateCompare=stateCompare,usCompare=usCompare))
     return(dt)
     on.exit(
-      if(load_acs==TRUE)rm(CV),
+      if(load_censusVars==TRUE)rm(CV),
       if(load_geos==TRUE)rm(geos),
       if(load_stats==TRUE)rm(profile_stats))
     if(load_profile_compare==TRUE)rm(stateCompare,usCompare)
