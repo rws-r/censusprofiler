@@ -333,22 +333,29 @@ tabler <- function(data_object=NULL,
    lF <- data.frame(type=df[u,"type"],rowNum=u,level=level)
    lookupFrame <- rbind(lookupFrame,lF)
   }
-
+  
   ## Set header rows by getting individual rows.
     if(uu==1){
       hRow <- (filter(lookupFrame,level==uu)$rowNum)
       hhRow <- (filter(lookupFrame,level==uu+1)$rowNum)
       hhhRow <- (filter(lookupFrame,level==uu+2)$rowNum)
+      hhhhRow <- (filter(lookupFrame,level==uu+3)$rowNum)
+      hhhhhRow <- (filter(lookupFrame,level==uu+4)$rowNum)
     }else{
       # What if it's just summary? Leave nonbold.
       if(length(tps)==1){
         hRow <- 0
         hhRow <- 0
         hhhRow <- 0
+        hhhhRow <- 0
+        hhhhhRow <- 0
       }else{
         hRow <- (filter(lookupFrame,level==uu)$rowNum)
         hhRow <- (filter(lookupFrame,level==uu+1)$rowNum)
         hhhRow <- (filter(lookupFrame,level==uu+2)$rowNum)
+        hhhhRow <- (filter(lookupFrame,level==uu+3)$rowNum)
+        hhhhhRow <- (filter(lookupFrame,level==uu+4)$rowNum)
+        
       }
     }
   
@@ -505,14 +512,40 @@ tabler <- function(data_object=NULL,
    #x <- width(x,j="labels",width=1.5)
    if(verbose==TRUE)message(paste(dur(st),"Adding row type coloring..."))
 
-   if(length(hRow)>1){
-     x <- bg(x,i=hRow,bg="#C4B7A7") 
+   header <- 0
+   if(length(hRow)==1){
+     # create header row if just one.
+     x <- bg(x,i=hRow,bg="#ccd5dd") 
+     x <- italic(x,i=hRow,italic=TRUE,part="body")
+     x <- bold(x,i=hRow,bold=TRUE,part="body")
+     header <- 1
    }
-   if(length(hhRow)>1 && summaryLevels==2){
-     x <- bg(x,i=hhRow,bg="#DBCCBA")
+   if(length(hRow)>1 & (length(hRow)<length(hhRow))){
+     x <- bg(x,i=hRow,bg="#ccd5dd") 
+     ## If multiple, create bold-italics. Also, make sure not more hRow than hhRow.
+     x <- italic(x,i=hRow,italic=TRUE,part="body")
+     x <- bold(x,i=hRow,bold=TRUE,part="body")
+     header <- 1
    }
-   if(length(hhhRow)>1 && summaryLevels==3){
-     x <- bg(x,i=hhhRow,bg="#FFF0DE")
+   if(length(hhRow)>0 && header==1){
+     # Leave 2nd string normal if middle.
+   }
+   if(length(hhRow)>0 && header==0 && length(hhhRow)==0){
+     # If hhRow is subvariable, and multiple primary variables exist (no 
+     # header variable), then italicize the subs.
+     x <- italic(x,i=hhRow,italic=TRUE,part="body")
+   }
+   
+   if(length(hhhRow)>0 && header==1){
+     x <- italic(x,i=hhhRow,italic=TRUE,part="body")
+   }
+   if(length(hhhhRow)>0 && header==1){
+     x <- color(x, i=hhhhRow,color = "#333333", part="body")
+     x <- padding(x, i=hhhhRow, padding.left = 12, part="body")
+   }
+   if(length(hhhhhRow)>0 && header==1){
+     x <- color(x, i=hhhhhRow,color = "#333333", part="body")
+     x <- padding(x, i=hhhhhRow, padding.left = 18, part="body")
    }
    
    #x <- add_header_row(x,values=c("Estimates","Comparisons"),colwidths = c(3,2))
