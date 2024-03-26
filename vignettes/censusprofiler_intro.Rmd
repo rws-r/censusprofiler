@@ -1,6 +1,7 @@
 ---
 title: "censusprofiler_intro"
-output: rmarkdown::html_vignette
+output: pdf_document
+#output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{censusprofiler_intro}
   %\VignetteEngine{knitr::rmarkdown}
@@ -14,11 +15,12 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup, echo=FALSE}
-library(censusprofiler)
+```{r setup, echo=FALSE,message=FALSE}
+devtools::load_all()
 geos <- readRDS(file.path(getwd(),"geos.RDS",fsep="/"))
 statesCompare <- readRDS(file.path(getwd(),"statesCompare.RDS",fsep="/"))
 usCompare <- readRDS(file.path(getwd(),"usCompare.RDS",fsep="/"))
+CV <- readRDS(file.path(getwd(),"CV.RDS",fsep="/"))
 ```
 
 Welcome to `censusprofiler`, a package designed to simplify regionalized census data capture. While `censusprofiler` can perform several functions, at its core, it takes a geographic point, draws a radius, and makes calls to the census api for geographical units around within that radius, and provides output that is more suited for presentation.
@@ -122,7 +124,7 @@ These can be obtained by running `load_data(load_censusVariables=TRUE, load_geos
 
 To display data in a simple table, call tabler(). The function may be used with an existing profile object, or in a standalone manner. If standalone, tabler() uses profiler() to capture data in the background. Output is generated using the `flextable`. This is a convenience function with minimal customization, designed primarily to give quick output for reviewing results.
 
-```{r}
+```{r warning=FALSE,message=FALSE}
 tabler(profile,
        tableID = "B02001",
        dispPerc = TRUE)
@@ -130,11 +132,12 @@ tabler(profile,
 
 One interesting benefit of tabler() is the ability to present comparison statistics. If you create comparison tables (using create_comparison_data()), you can pass these into tabler() to view how your geographic area statistics compare to statewide, or nationwide statistics. 
 
-```{r}
+```{r warning=FALSE,message=FALSE}
 tabler(profile,
        tableID = "B02001",
        dispPerc = TRUE,
        stateCompare = statesCompare,
+       state = 17,
        usCompare = usCompare)
 
 ```
@@ -143,20 +146,36 @@ tabler(profile,
 
 Additionally, we have employed the `tmap` package to provide mapping capacities to the data collected. This function, like tabler(), can be utilized with existing data, or in a standalone fashion. It provides several options for output, including a simple map of selected geographical units with or without a radius overlay, density maps, and proportion maps when profile object data is supplied. Additionally, because we use `tmap`, both static and interactive maps are available for output. 
 
-```{r}
+Street labeling is less than ideal in static tmap renderings. The interactive mode is far more interesting. However, the interactive mode is not suitable for printing (i.e., this document). However, you can exercise some control over what is displayed by setting the parameter `road_resolution` between 1-5.
+
+```{r,message=FALSE}
 mapper(mapDF = profile,
        geography = "tract",
+       MapTitle = "Selected Tracts by Radius",
        geosObject = geos,
-       areaOnly = TRUE)
-```
+       radiusOnly = TRUE,
+       road_resolution = 3)
 ```
 
-```{r}
+```{r,message=FALSE}
+mapper(mapDF = profile,
+       MapTitle = "Selected Tracts by Radius",
+       geography = "tract",
+       geosObject = geos,
+       radiusOnly = TRUE,
+       road_resolution = 4)
+```
+Mapper() also allows us to provide a variable for proportional visual analysis. Variables can be given by their explicit name (e.g., "B02001_002), or by simple numerical value (e.g. 2). If `dispPerc` is set to FALSE, mapes will be colored by relative estimate values. If set to TRUE, maps will be colored by relative proportion values. 
+```{r,message=FALSE}
 mapper(mapDF = profile,
        tableID = "B02001",
        variable = 2,
        geography = "tract",
        dispPerc = TRUE,
-       geosObject = geos)
+       geosObject = geos,
+       road_resolution = 2,
+       censusVars = CV)
 ```
 
+# Conclusion
+This short introduction covers the basics, but there's more to discover with `censusprofiler`. We encourage you to dig into the functionality, report any issues, and have fun exploring the US Census!

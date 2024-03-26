@@ -53,6 +53,10 @@
 #' @param dispPlaces Logical: whether to display places on non-interactive map.
 #' @param dispRails Logical: whether to display railroads on non-interactive
 #'   map.
+#' @param road_resolution Possible values: c(1,2,3,4). Value of 1 displays all roads
+#' and names; value of 2 shows all roads, but only potentially major road names; 
+#' value of 3 shows all roads and no names; value of 4 shows and names only 
+#' potentially major roads; value of 5 shows only potential major roads and no names.
 #' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
 #' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
 #' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
@@ -113,17 +117,18 @@ mapper <- function(mapDF=NULL,
                    state=NULL,
                    geoidLookup=NULL,
                    dispPerc=FALSE,
-                   LegendTitle="Census Tracts",
-                   MapTitle="Selected Census Tracts",
+                   LegendTitle=NULL,
+                   MapTitle=NULL,
                    radiusOnly=FALSE,
                    areaOnly=FALSE,
-                   alpha=0.3,
+                   alpha=0.5,
                    interactive=FALSE,
                    geosObject=NULL, 
                    markers=NULL,
                    dispRoads=TRUE,
                    dispWater=TRUE,
                    dispPlaces=TRUE,
+                   road_resolution=1,
                    dispRails=FALSE,
                    dataset_main="acs",
                    dataset_sub="acs5",
@@ -363,15 +368,32 @@ mapper <- function(mapDF=NULL,
   
   if(radiusOnly==FALSE & areaOnly==FALSE){
     if(verbose==TRUE)message(paste(dur(st),"Generating map label..."))
-    dfLab <- ifelse(is.null(LegendTitle),
-                    unique(mapDF %>% filter(tableID==tableID) %>% select(concept)),
-                    LegendTitle)
+    if(is.null(LegendTitle)){
+      dfLab <- unique(sf::st_drop_geometry(mapDF) %>% filter(variable==variable) %>% select(labels))
+      dfLab <- dfLab$labels
+    }else{
+      dfLab <- LegendTitle
+    }
+    if(is.null(MapTitle)){
+      dfTitle <- unique(sf::st_drop_geometry(mapDF) %>% filter(tableID==tableID) %>% select(concept))
+      dfTitle <- dfTitle$concept
+    }else{
+      dfTitle <- MapTitle
+    }
     
     if(verbose==TRUE)message(paste(dur(st),"Clearing out NA values..."))
     mapDF <- mapDF %>% filter(!is.na(value))
     
   }else{
-    dfLAb = "Selected Map Area"
+    dfl <- case_when(
+      geography=="state" ~ "State",
+      geography=="county" ~ "County",
+      geography=="tract" ~ "Tract",
+      geography=="block group" ~ "Block Group",
+      .default = "Geographical Unit"
+    )
+    dfLab <- dfl
+    dfTitle <- "Selected Map Area"
   }
   
 
@@ -406,8 +428,8 @@ mapper <- function(mapDF=NULL,
     x <- build_map(mapDF=mapDF,
                    filterAddress=filterAddress,
                    ggrObject=ggr,
-                   LegendTitle=LegendTitle,
-                   MapTitle=MapTitle,
+                   LegendTitle=dfLab,
+                   MapTitle=dfTitle,
                    i=interactive,
                    state=state,
                    county=county,
@@ -417,6 +439,7 @@ mapper <- function(mapDF=NULL,
                    dispWater=dispWater,
                    dispPlaces=dispPlaces,
                    dispRails=dispRails,
+                   road_resolution=road_resolution,
                    alpha=alpha,
                    areaOnly=areaOnly,
                    geography=geography,
@@ -429,8 +452,8 @@ mapper <- function(mapDF=NULL,
     x <- build_map(mapDF=mapDF,
                    filterAddress=filterAddress,
                    ggrObject=ggr,
-                   LegendTitle=LegendTitle,
-                   MapTitle=MapTitle,                   
+                   LegendTitle=dfLab,
+                   MapTitle=dfTitle,                 
                    i=interactive,
                    state=state,
                    county=county,
@@ -440,6 +463,7 @@ mapper <- function(mapDF=NULL,
                    dispWater=dispWater,
                    dispPlaces=dispPlaces,
                    dispRails=dispRails,
+                   road_resolution=road_resolution,
                    alpha=alpha,
                    areaOnly=areaOnly,
                    geography=geography,

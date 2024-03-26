@@ -523,6 +523,7 @@ geo_marker_builder <- function(obj=NULL,
                                dispPlaces=TRUE,
                                dispRails=TRUE,
                                geo_resolution=2,
+                               road_resolution=2,
                                ggrObject=NULL,
                                year=NULL,
                                verbose=FALSE,
@@ -572,8 +573,10 @@ geo_marker_builder <- function(obj=NULL,
       }else{
         roads <- tigris::roads(state=ggrObject$states,county = ggrObject$counties,year=year,filter_by=bbox,refresh=TRUE)
         roads <- geo_road_helper(roads)
-        roads <- roads %>% filter(RTTYP %in% c("C","I","O","S","U") |
-                                    suffix %in% c("Ave","Dr","Blvd","Pkwy","Expy"))
+        ## Allow for filtering based on road_resolution
+        roads <- roads %>% mutate(filter = ifelse(RTTYP %in% c("C","I","O","S","U") |
+                                                    suffix %in% c("Ave","Dr","Blvd","Pkwy","Expy"),
+                                                  1,0)) 
       }
       markerObject <- append(markerObject,list(roads = roads))
     }
@@ -1198,6 +1201,7 @@ build_map <- function(mapDF=NULL,
                       dispWater=TRUE,
                       dispPlaces=TRUE,
                       dispRails=FALSE, 
+                      road_resolution=2,
                       state=NULL,
                       county=NULL,
                       LegendTitle="Census Tracts",
@@ -1240,6 +1244,7 @@ build_map <- function(mapDF=NULL,
                                     dispPlaces = dispPlaces,
                                     dispRails = dispRails,
                                     geo_resolution = geo_resolution,
+                                    road_resolution = road_resolution,
                                     ggrObject = ggrObject,
                                     year = year,
                                     verbose = verbose,
@@ -1248,7 +1253,27 @@ build_map <- function(mapDF=NULL,
     ## Extract from markers object. TODO link this to dispRoads, etc as well.
     if(!is.null(names(markers))){
       if("roads" %in% names(markers)){
-        roads <- markers$roads
+        ## Show all road lines and road names.
+        if(road_resolution==1){
+          roadlines <- markers$roads
+          roadnames <- markers$roads
+        ## Show all road lines and potentially major road names.  
+        }else if(road_resolution==2){
+          roadlines <- markers$roads
+          roadnames <- markers$roads[markers$roads$filter==1,]
+        ## Show all road lines and no road names. 
+        }else if(road_resolution==3){
+          roadlines <- markers$roads
+          roadnames <- markers$roads[markers$roads$filter==99,]
+        ## Show potentially major road lines and names.
+        }else if(road_resolution==4){
+          roadlines <- markers$roads[markers$roads$filter==1,]
+          roadnames <- markers$roads[markers$roads$filter==1,]
+        ## Show potentially major road lines and no names.  
+        }else{
+          roadlines <- markers$roads[markers$roads$filter==1,]
+          roadnames <- markers$roads[markers$roads$filter==99,]
+        }
       }
       if("water" %in% names(markers)){
         water <- markers$water
@@ -1275,24 +1300,21 @@ build_map <- function(mapDF=NULL,
                 style="pretty",
                 id="name_clean",
                 alpha=alpha) +
-    {if(areaOnly==FALSE && !is.null(filterAddress)){
-      tm_shape(ggrObject$buffer) +
-        tm_borders("darkred",lwd=1) +
-        tm_shape(ggrObject$coordinates) +
-        tm_dots("darkred",size = .25) 
-    }} + 
+    tm_layout(main.title = MapTitle,
+              legend.bg.color = "#FFFFFF",
+              legend.bg.alpha = .7) + 
     {if(i==FALSE){
       {if(dispRoads==TRUE && geo_resolution>=1){
-        {if(nrow(roads)>0){
-          tm_shape(roads) +
+        {if(nrow(roadlines)>0){
+          tm_shape(roadlines) +
             tm_lines(col="#6F6F6F") }}}} +
         {if(dispRails==TRUE && geo_resolution>=1){
           {if(nrow(rails)>0){
             tm_shape(rails) +
               tm_lines(col="darkblue") }}}} +
         {if(dispRoads==TRUE && geo_resolution>=1){
-          {if(nrow(roads)>0){
-            tm_shape(roads) +
+          {if(nrow(roadnames)>0){
+            tm_shape(roadnames) +
               tm_text("FULLNAME",size=1/2,remove.overlap = TRUE) }}}} +
         {if(dispPlaces==TRUE && geo_resolution>=1){
           {if(nrow(places)>0){
@@ -1301,7 +1323,13 @@ build_map <- function(mapDF=NULL,
         {if(dispWater==TRUE && geo_resolution>=1){
           {if(nrow(water)>0){
             tm_shape(water) +
-              tm_polygons(col="#BFE7E1") }}}}
+              tm_polygons(col="#BFE7E1") }}}} + 
+        {if((areaOnly==FALSE && !is.null(filterAddress)) | radiusOnly==TRUE){
+          tm_shape(ggrObject$buffer) +
+            tm_borders("darkred",lwd=1) +
+            tm_shape(ggrObject$coordinates) +
+            tm_dots("darkred",size = .25) 
+        }}
     }} +
     tmap_mode(tmode)
   
