@@ -577,4 +577,16 @@ test_that("tabler() works", {
                       year=NULL,
                       geosObject=NULL,
                       verbose=verbose))
+  
+  # Test medians----------
+  expect_s3_class(tabler(year=2022,
+                         tableID = c("B01002"),
+                         geography="tract",
+                         filterAddress = address,
+                         filterRadius =1,
+                         geosObject = geos,
+                         verbose=verbose,
+                         censusVars = CV,
+                         mode="bygeo"),"flextable")
+  
 })

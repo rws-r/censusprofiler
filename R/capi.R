@@ -170,12 +170,15 @@ capi <- function(year=NULL,
   CV.GROUPS <- CV[[2]]
   
   # Check for mode mismatch
-  if(!is.null(tableID)){
-    varcalccheck <- CV[[2]] %>% filter(table_id %in% tableID)
-    if(!is.na(match("median",varcalccheck$calculation))){
-      stop("!> Summary tables do not work on median variables.")
-    } 
-  }
+  # if(!is.null(tableID)){
+  #   varcalccheck <- CV[[2]] %>% filter(table_id %in% tableID)
+  #   if(!is.na(match("median",varcalccheck$calculation)) & profile==TRUE){
+  #     warning(paste("Note: tableID `",tableID,"` is a median value, and will not properly calculate in the summary tables. Aggregates especially will not be accurate.",sep=""))
+  #   }
+  #   if(!is.na(match("median",varcalccheck$calculation)) & simpleReturn==FALSE){
+  #     warning(paste("Note: tableID `",tableID,"` is a median value, and will not properly calculate in the summary tables. Aggregates especially will not be accurate.",sep=""))
+  #   } 
+  # }
 
 ## Internal Functions ------------------------------------------------------
   
@@ -665,13 +668,13 @@ capi <- function(year=NULL,
     if(verbose==TRUE)message(paste(dur(st),"Adding subtotals + proportions..."))
     data <- data %>% dplyr::relocate(estimate,.after=labels)
     data <- data %>% dplyr::group_by(table_id,geoid) %>% 
-      dplyr::mutate(subtotal=max(estimate),
-                    pct = estimate/subtotal) %>% 
+      dplyr::mutate(subtotal=ifelse(calculation=="median",NA,max(estimate)),
+                    pct = ifelse(calculation=="median",NA,estimate/subtotal)) %>% 
       dplyr::ungroup()
     
     data <- data %>% dplyr::group_by(table_id,geoid,type) %>% 
-      dplyr::mutate(subtotal_by_type=sum(estimate),
-                    pct_by_type = estimate/subtotal_by_type) %>% 
+      dplyr::mutate(subtotal_by_type=ifelse(calculation=="median",NA,sum(estimate)),
+                    pct_by_type = ifelse(calculation=="median",NA,estimate/subtotal_by_type)) %>% 
       dplyr::ungroup()
     
     data <- data %>% dplyr::relocate(moe,.after=pct_by_type)
@@ -731,7 +734,10 @@ capi <- function(year=NULL,
       
       if(mode=="summarize" || profile==TRUE){
         if(filterSummary==FALSE || profile==TRUE){
-          data_type_3 <- summarize_data(data_type_1,
+          ## Deal with medians
+          dt1 <- data_type_1 %>% dplyr::mutate(estimate=ifelse(calculation=="median",NA,estimate))
+          
+          data_type_3 <- summarize_data(dt1,
                                         geography=geography,
                                         filterRadius = filterRadius,
                                         state=state,
@@ -743,7 +749,9 @@ capi <- function(year=NULL,
           data_type_3 <- data_type_3 %>% mutate(dt=3)
         }
         if(filterSummary==TRUE || profile==TRUE){
-          data_type_4 <- summarize_data(data_type_2,
+          ## Deal with medians
+          dt2 <- data_type_2 %>% dplyr::mutate(estimate=ifelse(calculation=="median",NA,estimate))
+          data_type_4 <- summarize_data(dt2,
                                         geography=geography,
                                         filterRadius = filterRadius,
                                         state=state,

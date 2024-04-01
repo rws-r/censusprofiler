@@ -16,6 +16,10 @@
 #' @param pctFilter A numeric value filtering the minimum percentage shown.
 #' @param filterAddress Address of centroid to filter census tracts/blocks.
 #' @param filterRadius In miles, the radius for the filter.
+#' @param filterByGeoType An irregular geo type to get a smaller overlapping set
+#'   of tracts, block_groups or other geography from. Options are currently
+#'   "metro", "place","combined_statistical_areas". E.g., Find all tracts in Chicago (place).
+#' @param filterByGeoValue A value to find object for filtering. Either NAME or GEOID.   
 #' @param state A state value to filter.
 #' @param county A county value to filter.
 #' @param geography Geography designation for capi().
@@ -72,12 +76,14 @@ tabler <- function(data_object=NULL,
                    summaryLevels=1,
                    filterAddress=NULL,
                    filterRadius=NULL,
+                   filterByGeoType=NULL,
+                   filterByGeoValue=NULL,
                    filterSummaryLevels=NULL,
                    state=NULL,
                    county=NULL,
                    tract=NULL,
                    block_group=NULL,
-                   geography="tract",
+                   geography=NULL,
                    year=NULL,
                    geosObject=NULL,
                    dataset_main="acs",
@@ -102,6 +108,47 @@ tabler <- function(data_object=NULL,
 # Error checking ----------------------------------------------------------
   if(verbose==TRUE)message(paste(dur(st),"Error checking..."))
   
+  if(is.null(filterAddress) & is.null(filterByGeoType) & is.null(state) & is.null(data_object) & geography!="us"){
+    stop("No geogrpahic regions selected/filtered.")
+  }
+  
+  if((!is.null(state) | !is.null(county)) && !is.null(filterAddress)){
+    state <- NULL
+    county <- NULL
+    warning("!> Ambiguous parameters: state/county + filterAddress provided. Defaulting to filterAddress.")
+  }
+  if((!is.null(tract) | !is.null(block_group)) && is.null(state) && is.null(county)){
+    stop("!> To select tract or block-level specifics, you need to include higher level geographical parameters (state/county) as well.")
+  }
+  if(!is.null(block_group) && is.null(tract)){
+    stop("!> To select block-level specifics, you need to include tract number as well.")
+  }
+  if(geography=="us" && !is.null(filterAddress)){
+    filterAddress <- NULL
+    filterRadius <- NULL
+    warning("!> Unnecessary use of filterAddress with geography=`us`. Ignoring.")
+  }
+  
+  if((!is.null(filterByGeoType) | !is.null(filterByGeoValue)) & 
+     (!is.null(filterAddress) | !is.null(filterRadius) | !is.null(county) | !is.null(tract))){
+    stop("Too many competing geographic filters set: filterbyGeoType cannot be used in conjunction with filterAddress or county.")
+  }
+  
+  if(is.null(geography)){
+    stop("!> You must provide one of the following geography parameters: `us`,`state`,`county`,`tract`,`block group`,`place`,`region`,`division`,`subdivision`,`consolidated city`")
+  }
+  if(is.null(year) & is.null(data_object)){
+    stop("!> You must provide a year parameter.")
+  }
+  if(is.null(dataset_main)){
+    stop("!> You must provide a dataset. Options are `acs` and subsidiaries.")
+  }
+  if(geography %in% c("region","division","subminor civil division","place","consolidated city")){
+    stop(paste("!> Unfortunately, we cannot provide results for `",geography,"` geographies at this time.",sep=""))
+  }
+  if(is.null(tableID) && is.null(variables)){
+    stop("!> No variables or tableID included. You need to include either a tableID to capture all subvariables, a tableID with numeric vector, or a complete vector of variables. You can also include a named list with multiple tableIDs and variables.")
+  }
 
 # Data selection and preparation-------------------------------------------
   if(verbose==TRUE)message(paste(dur(st),"Selecting data..."))
@@ -117,6 +164,8 @@ tabler <- function(data_object=NULL,
                             filterAddress=filterAddress,
                             filterRadius=filterRadius,
                             filterSummaryLevels=filterSummaryLevels,
+                            filterByGeoType = filterByGeoType,
+                            filterByGeoValue = filterByGeoValue,
                             state=state,
                             county=county,
                             tract=tract,
@@ -229,6 +278,22 @@ tabler <- function(data_object=NULL,
         stop("!> Invalid data type for `nosummary` mode. Requires type 2 data.")
       }
     }
+  }else if(mode=="bygeo"){
+    if(check==5){
+      df <- df$data$type1data
+      info <- data_object$info
+    }else if(check==6){
+      df <- df$type1data
+    }else if(check==1){
+      df <- df
+    }else{
+      #ADDTEST
+      if(check==2){
+        stop("!> Invalid data type for `simple` mode. Requires type 1 data. Did you mean to use mode `nosummary`?")
+      }else{
+        stop("!> Invalid data type for `simple` mode. Requires type 1 data.")
+      }
+    }
   }else{
     #ADDTEST
     stop("!> Invalid mode entry. Available options are `simple`,`nosummary`,`summarize`,`summarizeinc`.")
@@ -261,22 +326,6 @@ tabler <- function(data_object=NULL,
     df <- left_join(df,dfm,by="variable")
   }
   
-  if(mode=="bygeo"){
-    geo <- unique(df$geography)
-    if(geo=="state"){
-      dft <- df %>% group_by(state)
-    }else if(geo=="county"){
-      dft <- df %>% group_by(county)
-    }else if(geo=="tract"){
-      dft <- df %>% group_by(tract)
-    }else if(geo=="block group"){
-      dft <- df %>% group_by(block_group)
-    }else{
-      dft <- df
-      message("Nothing to group by, really. Try another geography.")
-    }
-  }  
-  
 ## Filtering and sorting ---------------------------------------------------
   if(verbose==TRUE)message(paste(dur(st),"Filtering / sorting..."))
   
@@ -305,7 +354,6 @@ tabler <- function(data_object=NULL,
     df <- df %>% ungroup() %>% filter(pct >= pctFilter)
   }
 
-
 ## Get type values for table coloring -----------------------------------
   if(verbose==TRUE)message(paste(dur(st),"Getting variable types for table display..."))
   
@@ -333,7 +381,7 @@ tabler <- function(data_object=NULL,
    lF <- data.frame(type=df[u,"type"],rowNum=u,level=level)
    lookupFrame <- rbind(lookupFrame,lF)
   }
-  
+
   ## Set header rows by getting individual rows.
     if(uu==1){
       hRow <- (filter(lookupFrame,level==uu)$rowNum)
@@ -343,22 +391,21 @@ tabler <- function(data_object=NULL,
       hhhhhRow <- (filter(lookupFrame,level==uu+4)$rowNum)
     }else{
       # What if it's just summary? Leave nonbold.
-      if(length(tps)==1){
-        hRow <- 0
-        hhRow <- 0
-        hhhRow <- 0
-        hhhhRow <- 0
-        hhhhhRow <- 0
-      }else{
+      # if(length(tps)==1){
+      #   hRow <- 0
+      #   hhRow <- 0
+      #   hhhRow <- 0
+      #   hhhhRow <- 0
+      #   hhhhhRow <- 0
+      # }else{
         hRow <- (filter(lookupFrame,level==uu)$rowNum)
         hhRow <- (filter(lookupFrame,level==uu+1)$rowNum)
         hhhRow <- (filter(lookupFrame,level==uu+2)$rowNum)
         hhhhRow <- (filter(lookupFrame,level==uu+3)$rowNum)
         hhhhhRow <- (filter(lookupFrame,level==uu+4)$rowNum)
-        
-      }
+      # }
     }
-  
+
   # SL2 If misreading a header, option to push it back relatively; reset summaryLevels
   if(summaryLevels<0){
     summaryLevels <- abs(summaryLevels)
@@ -375,6 +422,9 @@ tabler <- function(data_object=NULL,
   )
   ## Functionality to create comparison columns for us/state.
   if(!is.null(usCompare)){
+    if(!(tableID %in% usCompare$table_id)){
+      stop("That tableID is not in the supplied usCompare data object. Remake usCompare with variables included.")
+    }
     if(verbose==TRUE)message(paste(dur(st),"Building US comparison data..."))
     df <- comparison_helper(df = df,
                             comparisonDF = usCompare,
@@ -385,6 +435,9 @@ tabler <- function(data_object=NULL,
   }
 
   if(!is.null(stateCompare)){
+    if(!(tableID %in% stateCompare$table_id)){
+      stop("That tableID is not in the supplied usCompare data object. Remake usCompare with variables included.")
+    }
     if(verbose==TRUE)message(paste(dur(st),"Building state comparison data..."))
 
     if(!is.null(state)){
@@ -409,6 +462,7 @@ tabler <- function(data_object=NULL,
                             tableID = tableID,
                             stateFilter = sf,
                             verbose=verbose)
+
     #df$state_comp <- formattable::percent(df$state_comp,digits=0)
   }
  
@@ -441,7 +495,7 @@ tabler <- function(data_object=NULL,
   }  
 ## Column selection --------------------------------------------------------
   if(verbose==TRUE)message(paste(dur(st),"Selecting columns..."))
- 
+  
   ## Select appropriate columns based on inputs.
   if(length(cols)==1){
     cols <- names(df)
@@ -458,11 +512,11 @@ tabler <- function(data_object=NULL,
     colOption <- 3
   }else if(mode=="bygeo"){
     if("median" %in% df$calculation){
-      cols <- c("NAME","labels","estimate")
+      cols <- c("name","labels","estimate")
       colName <- c("Geography Name","Variable","Est. (n)") 
       colOption <- 4
     }else{
-      cols <- c("NAME","labels","estimate","pct")
+      cols <- c("name","labels","estimate","pct")
       colName <- c("Geography Name","Variable","Est. (n)","Est. (%)") 
       colOption <- 5
     }
@@ -500,8 +554,7 @@ tabler <- function(data_object=NULL,
   if(verbose==TRUE)message(paste(dur(st),"Building table..."))
   ## Create the table.
    if(mode=="bygeo"){
-     #ADDTEST
-     x <- as_grouped_data(df,groups = "NAME")
+     x <- as_grouped_data(df,groups = 'name',columns=cols)
      x <- as_flextable(x,col_keys = cols)
    }else{
      x <- flextable(df,col_keys = cols)

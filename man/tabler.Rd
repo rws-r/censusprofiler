@@ -22,12 +22,14 @@ tabler(
   summaryLevels = 1,
   filterAddress = NULL,
   filterRadius = NULL,
+  filterByGeoType = NULL,
+  filterByGeoValue = NULL,
   filterSummaryLevels = NULL,
   state = NULL,
   county = NULL,
   tract = NULL,
   block_group = NULL,
-  geography = "tract",
+  geography = NULL,
   year = NULL,
   geosObject = NULL,
   dataset_main = "acs",
@@ -72,6 +74,12 @@ using median or mean data.}
 \item{filterAddress}{Address of centroid to filter census tracts/blocks.}
 
 \item{filterRadius}{In miles, the radius for the filter.}
+
+\item{filterByGeoType}{An irregular geo type to get a smaller overlapping set
+of tracts, block_groups or other geography from. Options are currently
+"metro", "place","combined_statistical_areas". E.g., Find all tracts in Chicago (place).}
+
+\item{filterByGeoValue}{A value to find object for filtering. Either NAME or GEOID.}
 
 \item{filterSummaryLevels}{Lowest summary level to include.}
 

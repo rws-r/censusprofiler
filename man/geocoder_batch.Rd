@@ -9,7 +9,9 @@ geocoder_batch(
   addressCol = "address",
   start = NULL,
   limit = NULL,
-  verbose = FALSE
+  na.rm = TRUE,
+  batch = FALSE,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -20,6 +22,8 @@ geocoder_batch(
 \item{start}{If needed, a starting ID to begin batch processing.}
 
 \item{limit}{If needed, an ending ID to end batch processing.}
+
+\item{na.rm}{To remove NA. NOT YET IMPLEMENTED}
 
 \item{verbose}{Logical param to provide feedback.}
 }

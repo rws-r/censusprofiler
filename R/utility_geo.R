@@ -891,7 +891,22 @@ geo_census <- function(address,year){
 
 # geo_OSM----------------------------
 geo_OSM <- function(address,year){
-  coords <- geocode_OSM(address)
+
+  # Set default as NULL
+  coords <- NULL
+  tryCatch(
+    {
+      coords <- geocode_OSM(address)
+    },
+    error = function(e){
+      ## Catch download error
+      message(paste("OSM download error",e,sep=":"))
+    },
+    warning = function(w){
+      message(paste("Warning",w,sep=":"))
+    }
+  )
+  
   if(is.null(coords)){
     return(NA)
   }else{
@@ -911,6 +926,7 @@ geo_OSM <- function(address,year){
 #' @param address Address entry in STREET, CITY, STATE ZIP format.
 #' @param year Year to get census geocoding. See census info for year specs.
 #' @param service Whether to use census geocoder or OSM.
+#' @param batch Internal: for geocoder_batch.
 #' @param verbose Logical param to provide feedback.
 #'
 #' @importFrom stringr str_replace
@@ -931,66 +947,83 @@ geo_OSM <- function(address,year){
 geocoder <- function(address,
                      year=2020,
                      service="census",
+                     batch=FALSE,
                      verbose=FALSE){
   
   geo <- NULL
-  if(service=="census"){
-    geo <- geo_census(address,year)
-  }else if(service=="OSM"){
-    geo <- geo_OSM(address,year)
-  }else if(service=="tryall"){
-    tryCatch(
-      {
-        geo <- geo_census(address,year)
-        tryCatch(
-          {
-            if(is.na(geo)){
+  
+  if(batch==TRUE){
+    geocode <- geo_census(address,year)
+    if(is.na(geocode)){
+      if(verbose==TRUE)message("      No census--trying OSM geocode...")
+      geocode <- geo_OSM(address,year)
+      if(is.na(geocode)){
+        return(NA)
+      }else{
+        return(geocode)
+      }
+    }else{
+      return(geocode)
+    }
+  }else{
+    if(service=="census"){
+      geo <- geo_census(address,year)
+    }else if(service=="OSM"){
+      geo <- geo_OSM(address,year)
+    }else if(service=="tryall"){
+      tryCatch(
+        {
+          geo <- geo_census(address,year)
+          tryCatch(
+            {
+              if(is.na(geo)){
+                if(verbose==TRUE)message("      No census--trying OSM geocode...")
+                geo <- geo_OSM(address,year)
+              }
+            },
+            error = function(e){
+              message("Error in is.na:")
+              print(e)
+              stop()
+            },
+            warning = function(w){
+              message("Warning")
+              print(w)
+            }
+          )
+        },
+        error = function(e){
+          message("Error in call.")
+          print(e)
+          tryCatch(
+            {
               if(verbose==TRUE)message("      No census--trying OSM geocode...")
               geo <- geo_OSM(address,year)
+            },
+            error = function(e){
+              message("Error in is.na:")
+              print(e)
+              stop()
+            },
+            warning = function(w){
+              message("Warning")
+              print(w)
             }
-          },
-          error = function(e){
-            message("Error in is.na:")
-            print(e)
-            stop()
-          },
-          warning = function(w){
-            message("Warning")
-            print(w)
-          }
-        )
-      },
-      error = function(e){
-        message("Error in call.")
-        print(e)
-        tryCatch(
-          {
-            if(verbose==TRUE)message("      No census--trying OSM geocode...")
-            geo <- geo_OSM(address,year)
-          },
-          error = function(e){
-            message("Error in is.na:")
-            print(e)
-            stop()
-          },
-          warning = function(w){
-            message("Warning")
-            print(w)
-          }
-        )
-      },
-      warning = function(w){
-        message("Warning:")
-        print(w)
-      }
-    )
-  }else{
-    stop("You did not provide the right value for service. Either census or OSM.")
-  }
-  if(is.null(geo)){
-    stop("Error in obtaining geocode. Check services.")
-  }else{
-    return(geo)
+          )
+        },
+        warning = function(w){
+          message("Warning:")
+          print(w)
+        }
+      )
+    }else{
+      stop("You did not provide the right value for service. Either census or OSM.")
+    }
+    if(is.null(geo)){
+      stop("Error in obtaining geocode. Check services.")
+    }else{
+      return(geo)
+    }
   }
 }
 
@@ -1001,6 +1034,7 @@ geocoder <- function(address,
 #' @param addressCol Name or number of address column.
 #' @param start If needed, a starting ID to begin batch processing.
 #' @param limit If needed, an ending ID to end batch processing.
+#' @param na.rm To remove NA. NOT YET IMPLEMENTED
 #' @param verbose Logical param to provide feedback.
 #' 
 #' @importFrom stringr str_to_lower
@@ -1018,7 +1052,9 @@ geocoder_batch <- function(addressList,
                            addressCol = "address",
                            start=NULL,
                            limit=NULL,
-                           verbose=FALSE){
+                           na.rm=TRUE,
+                           batch=FALSE,
+                           verbose=TRUE){
   
   ## Deal with "no visible binding for global variables"
   addressListID <- NULL
@@ -1082,7 +1118,23 @@ Do you want to continue, and potentially overwrite? (Y/N)")
   # Or is it correct to include non-geography items?
   for(i in start:limit){
     if(verbose==TRUE)message(paste("[",counterAll,"/",(limit-start+1)," -- df row ",i,"] Trying census geocode...",sep=""))
-    geo <- geocoder(addressList[i,addressCol],2020,service="tryall")
+    if(is.na(addressList[i,addressCol])){
+      if(verbose==TRUE)message("NA; skipping.")
+      geo <- NA
+    }else{
+      
+      # Encode address properly.
+      if(is.na(addressList[i,addressCol])){
+        addy <- NA
+      }else{
+        addy <- as.character(addressList[i,addressCol])
+      }
+      geo <- geocoder(addy,
+                      year=2020,
+                      service="tryall",
+                      batch=FALSE,
+                      verbose=verbose)
+    }
     if(!is.na(geo)){
       if(verbose==TRUE)message("      Saving data...")
       geo <- geo %>% mutate(addressListID=i)

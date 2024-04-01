@@ -4,7 +4,13 @@
 \alias{geocoder}
 \title{Geocoder}
 \usage{
-geocoder(address, year = 2020, service = "census", verbose = FALSE)
+geocoder(
+  address,
+  year = 2020,
+  service = "census",
+  batch = FALSE,
+  verbose = FALSE
+)
 }
 \arguments{
 \item{address}{Address entry in STREET, CITY, STATE ZIP format.}
@@ -12,6 +18,8 @@ geocoder(address, year = 2020, service = "census", verbose = FALSE)
 \item{year}{Year to get census geocoding. See census info for year specs.}
 
 \item{service}{Whether to use census geocoder or OSM.}
+
+\item{batch}{Internal: for geocoder_batch.}
 
 \item{verbose}{Logical param to provide feedback.}
 }
