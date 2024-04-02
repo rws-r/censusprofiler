@@ -69,7 +69,11 @@ get_census_variables <- function(year=NULL,
     ## Add nice extra info.
     cv <- cv %>% dplyr::mutate(table_id=gsub('(_*?)_.*','\\1',name),
                                varID=gsub(".*_","",name),
-                               calculation = ifelse(str_detect(concept,"(?i)MEDIAN"),"median","count"),
+                               calculation = case_when(
+                                 stringr::str_detect(concept,"(?i)MEDIAN")==TRUE ~ "median",
+                                 stringr::str_detect(concept,"(?i)MEAN ")==TRUE ~ "mean",
+                                 stringr::str_detect(concept,"(?i)AVERAGE")==TRUE ~ "mean",
+                                 .default = "count"),
                                type = case_when(
                                  stringr::str_count(label,"!!") == 1 ~ "root",
                                  stringr::str_count(label,"!!") == 2 ~ "summary",
@@ -125,7 +129,7 @@ get_census_variables <- function(year=NULL,
     path <- paste(pathElements,collapse="/")
     
     dir <- httr::GET("http://api.census.gov",
-                    path="data")
+                    path=path)
     
     if(httr::status_code(dir)!=200){
       stop(paste("!> There was an error in the GET call / json text. ERROR",httr::status_code(dt)))
@@ -1305,8 +1309,8 @@ stat_table_builder <- function(year=NULL,
           # data <- data.table::rbindlist(list(data,x))
           #data <- rbind(data,x)
           if(saveProgress==TRUE){
-            filename_i <- paste("~/DATA/censusprofileR/data/statfiles/stat_table_",sprintf("%02d",states[i]),".RDS",sep="")
-            # filename_d <- "~/DATA/censusprofileR/data/statfiles/stat_table_cumulative.RDS"
+            filename_i <- paste("~/DATA/censusprofiler/data/statfiles/stat_table_",sprintf("%02d",states[i]),".RDS",sep="")
+            # filename_d <- "~/DATA/censusprofiler/data/statfiles/stat_table_cumulative.RDS"
             saveRDS(x,filename_i)
             # saveRDS(data,filename_d)
             #if(file.exists(filename_i) && file.exists(filename_d)){
@@ -1988,33 +1992,33 @@ summarize_data <- function(data=NULL,
   data <- data %>% group_by(table_id,type) %>% mutate(subtotals=sum(estimate))
   data <- data %>% mutate(pct = estimate/subtotals)
 return(data)
-  stop()
-  # Add geographical details.
-  if(geography=="state"){
-    data <- data %>% mutate(state=unique(state))
-  }else if(geography=="county"){
-    data <- data %>% mutate(state=unique(state))
-    data <- data %>% mutate(county=unique(county))
-  }else if(geography=="tract"){
-    data <- data %>% mutate(state=unique(state))
-    data <- data %>% mutate(county=unique(county))
-    data <- data %>% mutate(tract=unique(tract))
-    print(data$county)
-    stop()
-  }else if(geography=="block group"){
-    data <- data %>% mutate(state=unique(state))
-    data <- data %>% mutate(county=unique(county))
-    data <- data %>% mutate(tract=unique(tract))
-    data <- data %>% mutate(block_group = unique(block_group))
-    #TODO ^ this needs to get cleaned up. It's tricky because block groups 
-    # are single numeric values (1,2,3), as opposed to tracts, which are 
-    # lengthier and vary across geographies. Need to better identify block 
-    # groups.
-  }else{
-  }
-  data <- data %>% mutate(geography = geography)
-  if(!is.null(filterRadius))data <- data %>% mutate(radius=filterRadius)
-  return(data)
+  # stop()
+  # # Add geographical details.
+  # if(geography=="state"){
+  #   data <- data %>% mutate(state=unique(state))
+  # }else if(geography=="county"){
+  #   data <- data %>% mutate(state=unique(state))
+  #   data <- data %>% mutate(county=unique(county))
+  # }else if(geography=="tract"){
+  #   data <- data %>% mutate(state=unique(state))
+  #   data <- data %>% mutate(county=unique(county))
+  #   data <- data %>% mutate(tract=unique(tract))
+  #   print(data$county)
+  #   stop()
+  # }else if(geography=="block group"){
+  #   data <- data %>% mutate(state=unique(state))
+  #   data <- data %>% mutate(county=unique(county))
+  #   data <- data %>% mutate(tract=unique(tract))
+  #   data <- data %>% mutate(block_group = unique(block_group))
+  #   #TODO ^ this needs to get cleaned up. It's tricky because block groups 
+  #   # are single numeric values (1,2,3), as opposed to tracts, which are 
+  #   # lengthier and vary across geographies. Need to better identify block 
+  #   # groups.
+  # }else{
+  # }
+  # data <- data %>% mutate(geography = geography)
+  # if(!is.null(filterRadius))data <- data %>% mutate(radius=filterRadius)
+  # return(data)
 }
 
 # set_api_key----------------------
@@ -2372,4 +2376,27 @@ profile_helper <- function(tableID=NULL,
   # }else{
   # stop("You did not specify any arguments.")
   # }
+}
+
+cplot <- function(data=NULL,
+                  tableID=NULL,
+                  variables=NULL,
+                  moe=FALSE){
+  if(type_data(data)==5){
+    data <- data$data$type1data
+  }
+  
+  ggplot2::ggplot(data,
+                  aes(x=variable,
+                      y=estimate)) +
+    geom_col() +
+    facet_wrap(vars(name)) + 
+    {if(moe==TRUE){geom_errorbar(aes(ymin=estimate-moe,
+                      ymax=estimate+moe),
+                  width=.2,
+                  position=position_dodge(.9)) }} +
+    coord_flip()
+  
+  
+  
 }

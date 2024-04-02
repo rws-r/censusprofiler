@@ -668,13 +668,13 @@ capi <- function(year=NULL,
     if(verbose==TRUE)message(paste(dur(st),"Adding subtotals + proportions..."))
     data <- data %>% dplyr::relocate(estimate,.after=labels)
     data <- data %>% dplyr::group_by(table_id,geoid) %>% 
-      dplyr::mutate(subtotal=ifelse(calculation=="median",NA,max(estimate)),
-                    pct = ifelse(calculation=="median",NA,estimate/subtotal)) %>% 
+      dplyr::mutate(subtotal=ifelse(calculation=="median" | calculation=="mean",NA,max(estimate)),
+                    pct = ifelse(calculation=="median" | calculation=="mean",NA,estimate/subtotal)) %>% 
       dplyr::ungroup()
     
     data <- data %>% dplyr::group_by(table_id,geoid,type) %>% 
-      dplyr::mutate(subtotal_by_type=ifelse(calculation=="median",NA,sum(estimate)),
-                    pct_by_type = ifelse(calculation=="median",NA,estimate/subtotal_by_type)) %>% 
+      dplyr::mutate(subtotal_by_type=ifelse(calculation=="median" | calculation=="mean",NA,sum(estimate)),
+                    pct_by_type = ifelse(calculation=="median" | calculation=="mean",NA,estimate/subtotal_by_type)) %>% 
       dplyr::ungroup()
     
     data <- data %>% dplyr::relocate(moe,.after=pct_by_type)
@@ -711,17 +711,19 @@ capi <- function(year=NULL,
   ## This is `type 2 data`
     if(filterSummary==TRUE || profile==TRUE){
       
-      ## Remove bottom specified summary levels.
       levels <- c("root","summary","level_1","level_2","level_3","level_4")
-      n <- 1
-      # Start w/ baseline
-      fsl <- levels[n]
-      # Iteratively build filter list if not root
-      while(levels[n]!=filterSummaryLevels){
-        n <- n+1
-        fsl <- levels[1:n]
+      fsl <- c()
+      ## Remove bottom specified summary levels.
+      if(is.numeric(filterSummaryLevels)==TRUE){
+        for(i in 1:length(levels)){
+          if(i %in% filterSummaryLevels){
+            c(fsl,levels[i])
+          }
+        }
+      }else{
+        fsl <- filterSummaryLevels
       }
-      
+    
       data_type_2 <- data_type_1 %>% filter(!(type %in% fsl))
       data_type_2 <- data_type_2 %>% mutate(dt=2)
     }
@@ -735,31 +737,41 @@ capi <- function(year=NULL,
       if(mode=="summarize" || profile==TRUE){
         if(filterSummary==FALSE || profile==TRUE){
           ## Deal with medians
-          dt1 <- data_type_1 %>% dplyr::mutate(estimate=ifelse(calculation=="median",NA,estimate))
+          data_type_3 <- data_type_1 %>% dplyr::mutate(estimate=ifelse(calculation=="median",NA,estimate))
+          data_type_3 <- data_type_3 %>% group_by(table_id,year,variable,concept,labels,calculation,type,varID) %>% 
+            summarize(estimate=if(any(calculation=="mean"))mean(estimate)
+                               else(sum(estimate)),
+                      subtotal_by_type=sum(subtotal_by_type)) %>% 
+            ungroup()
+          data_type_3 <- data_type_3 %>% 
+            group_by(table_id) %>% 
+            mutate(subtotals=if(any(calculation=="mean"))NA
+                             else(max(estimate)),
+                   pct = estimate/subtotals,
+                   pct_by_type = estimate/subtotal_by_type,
+                   dt=3) %>% 
+            ungroup()
           
-          data_type_3 <- summarize_data(dt1,
-                                        geography=geography,
-                                        filterRadius = filterRadius,
-                                        state=state,
-                                        county=county,
-                                        tract=tract,
-                                        block_group=block_group)
-          
-        #  data_type_3 <- relocation_fun(data_type_3)
-          data_type_3 <- data_type_3 %>% mutate(dt=3)
+          data_type_3 <- data_type_3 %>% relocate(estimate,subtotals, pct,subtotal_by_type,pct_by_type, .after=labels)
+
         }
         if(filterSummary==TRUE || profile==TRUE){
-          ## Deal with medians
-          dt2 <- data_type_2 %>% dplyr::mutate(estimate=ifelse(calculation=="median",NA,estimate))
-          data_type_4 <- summarize_data(dt2,
-                                        geography=geography,
-                                        filterRadius = filterRadius,
-                                        state=state,
-                                        county=county,
-                                        tract=tract,
-                                        block_group=block_group)
-        #  data_type_4 <- relocation_fun(data_type_4)
-          data_type_4 <- data_type_4 %>% mutate(dt=4)
+          data_type_4 <- data_type_3 %>% filter(!(type %in% fsl))
+          # ## Deal with medians
+          # data_type_4 <- data_type_2 %>% dplyr::mutate(estimate=ifelse(calculation=="median",NA,estimate))
+          # data_type_4 <- data_type_4 %>% group_by(table_id,year,variable,concept,labels,calculation,type,varID) %>% 
+          #   summarize(estimate=sum(estimate),
+          #             subtotal_by_type=sum(subtotal_by_type))
+          # data_type_4 <- data_type_4 %>% 
+          #   group_by(table_id) %>% 
+          #   mutate(subtotals=max(estimate),
+          #          pct = estimate/subtotals,
+          #          pct_by_type = estimate/subtotal_by_type,
+          #          dt=4) %>% 
+          #   ungroup()
+          # 
+          # data_type_4 <- data_type_4 %>% relocate(estimate,subtotals, pct,subtotal_by_type,pct_by_type, .after=labels)
+          
         }
       }
   
