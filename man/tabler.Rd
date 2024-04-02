@@ -36,13 +36,15 @@ tabler(
   dataset_sub = "acs5",
   dataset_last = NULL,
   censusVars = NULL,
+  moe = FALSE,
+  groupPerc = FALSE,
   verbose = FALSE
 )
 }
 \arguments{
 \item{data_object}{A census data object.}
 
-\item{mode}{Options for display calculations: "summarize", "summarizeinc","simple","bygeo","nosummary"}
+\item{mode}{Logical parameter to specify whether margin of error should be calculated.}
 
 \item{tableID}{Formerly known as varBase, or concept, or group: i.e., "B01001"}
 
@@ -104,6 +106,8 @@ of tracts, block_groups or other geography from. Options are currently
 \item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
 
 \item{censusVars}{Passthrough object to bypass get_census_variables}
+
+\item{groupPerc}{Logical parameter to specify whether to display percentages by type in tables.}
 
 \item{verbose}{Pass through param to create_profile() for feedback.}
 }

@@ -37,6 +37,8 @@
 #' @param filterSummaryLevels Lowest summary level to include.
 #' @param tract Input (abb. or FIPS) of tract for search.
 #' @param block_group Input (abb. or FIPS) of block group for search.
+#' @param mode Logical parameter to specify whether margin of error should be calculated.
+#' @param groupPerc Logical parameter to specify whether to display percentages by type in tables.
 #'
 #' @import flextable
 #' @import officer
@@ -90,6 +92,8 @@ tabler <- function(data_object=NULL,
                    dataset_sub="acs5",
                    dataset_last=NULL,
                    censusVars=NULL,
+                   moe=FALSE,
+                   groupPerc=FALSE,
                    verbose=FALSE){
   
   ## To avoid "no visible binding for global variable" error
@@ -108,7 +112,8 @@ tabler <- function(data_object=NULL,
 # Error checking ----------------------------------------------------------
   if(verbose==TRUE)message(paste(dur(st),"Error checking..."))
   
-  if(is.null(filterAddress) & is.null(filterByGeoType) & is.null(state) & is.null(data_object) & geography!="us"){
+  if(is.null(filterAddress) && is.null(filterByGeoType) 
+     && is.null(state) && is.null(data_object) && geography!="us"){
     stop("No geogrpahic regions selected/filtered.")
   }
   
@@ -134,17 +139,19 @@ tabler <- function(data_object=NULL,
     stop("Too many competing geographic filters set: filterbyGeoType cannot be used in conjunction with filterAddress or county.")
   }
   
-  if(is.null(geography)){
+  if(is.null(geography) && is.null(data_object)){
     stop("!> You must provide one of the following geography parameters: `us`,`state`,`county`,`tract`,`block group`,`place`,`region`,`division`,`subdivision`,`consolidated city`")
+  }
+  if(!is.null(geography)){
+    if(geography %in% c("region","division","subminor civil division","place","consolidated city")){
+      stop(paste("!> Unfortunately, we cannot provide results for `",geography,"` geographies at this time.",sep=""))
+    }
   }
   if(is.null(year) & is.null(data_object)){
     stop("!> You must provide a year parameter.")
   }
   if(is.null(dataset_main)){
     stop("!> You must provide a dataset. Options are `acs` and subsidiaries.")
-  }
-  if(geography %in% c("region","division","subminor civil division","place","consolidated city")){
-    stop(paste("!> Unfortunately, we cannot provide results for `",geography,"` geographies at this time.",sep=""))
   }
   if(is.null(tableID) && is.null(variables)){
     stop("!> No variables or tableID included. You need to include either a tableID to capture all subvariables, a tableID with numeric vector, or a complete vector of variables. You can also include a named list with multiple tableIDs and variables.")
@@ -336,6 +343,9 @@ tabler <- function(data_object=NULL,
   if(dispPerc==TRUE){
     df$pct <- formattable::percent(df$pct,digits=0)  
   }
+  if(groupPerc==TRUE){
+    df$pct_by_type <- formattable::percent(df$pct_by_type,digits=0)  
+  }
   
   if(pdf==TRUE){
     fmt <- "latex"
@@ -493,6 +503,12 @@ tabler <- function(data_object=NULL,
   if(!is.null(stateCompare)){
     df$state_pct <- formattable::percent(df$state_pct,digits=0)
   }  
+  
+  ## Update moe to include pretty display of +/-
+  if(moe==TRUE & mode %in% c("simple","nosummary","bygeo")){
+    df <- df %>% mutate(moe=paste("+/-",moe))
+  }
+  
 ## Column selection --------------------------------------------------------
   if(verbose==TRUE)message(paste(dur(st),"Selecting columns..."))
   
@@ -501,43 +517,93 @@ tabler <- function(data_object=NULL,
     cols <- names(df)
     colOption <- 1
   }else{
-  if("subtotals" %in% names(df)){
-    cols <- cols
-    #colName <- c("Label","Est. (n)","Est. (%)", "SubGroup %")
-    colName <- c("Label","Est. (n)","Est. (%)")
-    colOption <- 2
-  }else if(dispPerc==FALSE){
-    cols <- c("labels","estimate")
-    colName <- c("Variable","Est. (n)")
-    colOption <- 3
-  }else if(mode=="bygeo"){
-    if("median" %in% df$calculation){
-      cols <- c("name","labels","estimate")
-      colName <- c("Geography Name","Variable","Est. (n)") 
-      colOption <- 4
+    if("subtotals" %in% names(df)){
+      cols <- cols
+      #colName <- c("Label","Est. (n)","Est. (%)", "SubGroup %")
+      colName <- c("Label","Est. (n)","Est. (%)")
+      colOption <- 2
+      if(moe==TRUE & mode %in% c("simple","nosummary","bygeo")){
+        cols <- c(cols,"moe")
+        colName <- c(colName,"Margin of Error")
+        colOption <- colOption+1
+      }
+      if(groupPerc==TRUE){
+        cols <- c(cols,"subtotal_by_type","pct_by_type")
+        colName <- c(colName,"Group Subtot.","Group %")
+        colOption <- colOption+1
+      }
+    }else if(dispPerc==FALSE){
+      cols <- c("labels","estimate")
+      colName <- c("Variable","Est. (n)")
+      colOption <- 3
+      if(moe==TRUE & mode %in% c("simple","nosummary","bygeo")){
+        cols <- c(cols,"moe")
+        colName <- c(colName,"Margin of Error")
+        colOption <- colOption+1
+      }
+      if(groupPerc==TRUE){
+        cols <- c(cols,"subtotal_by_type","pct_by_type")
+        colName <- c(colName,"Group Subtot.","Group %")
+        colOption <- colOption+1
+      }
+    }else if(mode=="bygeo"){
+      if("median" %in% df$calculation){
+        cols <- c("name","labels","estimate")
+        colName <- c("Geography Name","Variable","Est. (n)") 
+        colOption <- 4
+        if(moe==TRUE & mode %in% c("simple","nosummary","bygeo")){
+          cols <- c(cols,"moe")
+          colName <- c(colName,"Margin of Error")
+          colOption <- colOption+1
+        }
+        if(groupPerc==TRUE){
+          cols <- c(cols,"subtotal_by_type","pct_by_type")
+          colName <- c(colName,"Group Subtot.","Group %")
+          colOption <- colOption+1
+        }
+      }else{
+        cols <- c("name","labels","estimate","pct")
+        colName <- c("Geography Name","Variable","Est. (n)","Est. (%)") 
+        colOption <- 5
+        if(moe==TRUE & mode %in% c("simple","nosummary","bygeo")){
+          cols <- c(cols,"moe")
+          colName <- c(colName,"Margin of Error")
+          colOption <- colOption+1
+        }
+        if(groupPerc==TRUE){
+          cols <- c(cols,"subtotal_by_type","pct_by_type")
+          colName <- c(colName,"Group Subtot.","Group %")
+          colOption <- colOption+1
+        }
+      }
     }else{
-      cols <- c("name","labels","estimate","pct")
-      colName <- c("Geography Name","Variable","Est. (n)","Est. (%)") 
-      colOption <- 5
+      cols <- c("labels","estimate","pct")
+      colName <- c("Variable","Est. (n)","Est. (%)")
+      colOption <- 6
+      if(moe==TRUE & mode %in% c("simple","nosummary","bygeo")){
+        cols <- c(cols,"moe")
+        colName <- c(colName,"Margin of Error")
+        colOption <- colOption+1
+      }
+      if(groupPerc==TRUE){
+        cols <- c(cols,"subtotal_by_type","pct_by_type")
+        colName <- c(colName,"Group Subtot.","Group %")
+        colOption <- colOption+1
+      }
     }
-  }else{
-    cols <- c("labels","estimate","pct")
-    colName <- c("Variable","Est. (n)","Est. (%)")
-    colOption <- 6
-  }
-  if(!is.null(usCompare)){
-    # cols <- c(cols,"us_sub_pct","us_comp_diff")
-    # colName <- c(colName,"Tot. US %","Diff.")
-    # cols <- c(cols,"us_sub_pct")
-     cols <- c(cols,"us_pct")
-     colName <- c(colName,"Tot. US %")
-  }
-  if(!is.null(stateCompare)){
-    # cols <- c(cols,"state_sub_pct","state_comp_diff")
-    # colName <- c(colName,paste("Tot.",stNAME,"%"),"Diff.")
-     cols <- c(cols,"state_pct")
-    colName <- c(colName,"Tot State %")
-   }
+    if(!is.null(usCompare)){
+      # cols <- c(cols,"us_sub_pct","us_comp_diff")
+      # colName <- c(colName,"Tot. US %","Diff.")
+      # cols <- c(cols,"us_sub_pct")
+      cols <- c(cols,"us_pct")
+      colName <- c(colName,"Tot. US %")
+    }
+    if(!is.null(stateCompare)){
+      # cols <- c(cols,"state_sub_pct","state_comp_diff")
+      # colName <- c(colName,paste("Tot.",stNAME,"%"),"Diff.")
+      cols <- c(cols,"state_pct")
+      colName <- c(colName,"Tot State %")
+    }
   }
   if(length(cols)!=length(colName)){
     stop(paste("!> col and colName do not match in length.\n col=",
@@ -552,6 +618,15 @@ tabler <- function(data_object=NULL,
   
 # Table creation ----------------------------------------------------------
   if(verbose==TRUE)message(paste(dur(st),"Building table..."))
+  
+  # Get table title
+  table_type <- case_when(
+    mode %in% c("summarize","summarizeinc") ~ "(aggregate)",
+    mode == "bygeo" ~ "(by geographical unit)",
+    .default = ""
+  )
+  table_title <- paste(as.character(unique(df$concept)),table_type)
+  
   ## Create the table.
    if(mode=="bygeo"){
      x <- as_grouped_data(df,groups = 'name',columns=cols)
@@ -561,6 +636,10 @@ tabler <- function(data_object=NULL,
    }
    x <- theme_censusprofiler(x)
    x <- set_header_labels(x,values=unlist(colName))
+   x <- set_caption(x,
+                    as_paragraph(
+                      as_chunk(table_title,props = fp_text_default(font.family = "Open Sans"))),
+                    word_stylename="Table Caption")
    #x <- add_header_row(x, values = unique(df$concept),colwidths = length(cols))
    #x <- width(x,j="labels",width=1.5)
    if(verbose==TRUE)message(paste(dur(st),"Adding row type coloring..."))
