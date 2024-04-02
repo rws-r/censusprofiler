@@ -562,8 +562,15 @@ geo_marker_builder <- function(obj=NULL,
   
   if(is.null(obj)){
     if(verbose==TRUE)message("Creating bounding box...")
-    polys <- st_union(ggrObject$df$geometry)
-    bbox <- st_bbox(polys)
+    if(!is.null(ggrObject$df$geometry)){
+      polys <- st_union(ggrObject$df$geometry)
+      bbox <- st_bbox(polys)
+    }else if(!is.null(ggrObject$buffer)){
+      bbox <- ggrObject$buffer
+    }else{
+      stop("Error in geo_marker_builder. No valid ggrObject supplied.")
+    }
+    
     markerObject <- list()
     
     if(dispRoads==TRUE && geo_resolution>=1){
