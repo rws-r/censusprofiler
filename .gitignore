@@ -10,3 +10,8 @@ tests/.DS_Store
 /tests/testthat/data/
 TODO
 inst/doc
+inst/.DS_Store
+inst/rmd/.DS_Store
+inst/rmd/profile_report.pdf
+inst/rmd/Rplots.pdf
+data/.DS_Store

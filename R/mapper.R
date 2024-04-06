@@ -352,12 +352,16 @@ mapper <- function(mapDF=NULL,
     ## Otherwise, use mapDF.
     if(is.null(mapDF)){
       mapDF <- ggr$df
-      mapDF <- mapDF %>% mutate(name_clean = GEOID)
+      #mapDF <- mapDF %>% mutate(name_clean = GEOID)
+      mapDF <- mapDF %>% mutate(name_clean = NAMELSAD)
     }else{
-      md <- sf::st_drop_geometry(mapDF)
-      for(i in 1:nrow(md)){
-        mapDF <- mapDF %>% mutate(name_clean = GEOID)
-      }
+      #md <- sf::st_drop_geometry(mapDF)
+      mapDF <- mapDF %>% mutate(name_clean = NAMELSAD)
+      # for(i in 1:nrow(md)){
+      #   #mapDF <- mapDF %>% mutate(name_clean = GEOID)
+      #   mapDF[i,'name_clean'] <- (unlist(stringr::str_split(md[i,'name'],";"))[1])
+      #   
+      # }
     }
   }
 

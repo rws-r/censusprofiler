@@ -8,16 +8,6 @@ params:
   mapAlign: "left"
   radius: "one"
   year: 2021
-  # df: !expr readRDS("test/village.RDS")
-  # geosObject: !expr readRDS("test/geos.RDS")
-  # tableID: !expr readRDS("test/profile_tableID.RDS")
-  # variables: !expr readRDS("test/profile_variables.RDS")
-  # placeOfBirth: FALSE
-  # placeOfBirthFilter: 0
-  # usCompare: !expr readRDS("test/usCompare.RDS")
-  # stateCompare: !expr readRDS("test/statesCompare.RDS") 
-  # stat_table: !expr readRDS("test/stat_table.RDS")
-  # ACS: !expr readRDS("test/ACS.RDS")
   df: vbc
   geosObject: geos
   tableID: tableID
@@ -27,8 +17,8 @@ params:
   usCompare: var
   stateCompare: var
   stat_table: var
-  ACS: var
-  test: TRUE
+  censusVars: var
+  test: FALSE
 ---
 
 ```{r setup, include=FALSE}
@@ -65,9 +55,9 @@ if(params$test==FALSE){
   usCompare <- params$usCompare
   stateCompare <- params$stateCompare
   stat_table <- params$stat_table
-  ACS <- params$ACS
+  censusVars <- params$censusVars
 }else{
-  path <- "~/DATA/censusprofileR/inst/rmd/test/"
+  path <- "~/DATA/censusprofiler/inst/rmd/test/"
   df <- readRDS(paste(path,"type_5_data",".RDS",sep=""))
   geosObject <- readRDS(paste(path,"geos",".RDS",sep=""))
   tableID <- readRDS(paste(path,"profile_tableID",".RDS",sep=""))
@@ -75,13 +65,14 @@ if(params$test==FALSE){
   usCompare <- readRDS(paste(path,"usCompare",".RDS",sep=""))
   stateCompare <- readRDS(paste(path,"stateCompare",".RDS",sep=""))
   stat_table <- readRDS(paste(path,"stat_table",".RDS",sep=""))
-  ACS <- readRDS(paste(path,"ACS",".RDS",sep=""))
+  censusVars <- readRDS(paste(path,"censusVars",".RDS",sep=""))
 }
-  
-ACS.VARS <- ACS[[1]]
-ACS.TABLES <- ACS[[2]]
 
-markers <- geo_marker_builder(dispRoads = TRUE,dispWater = TRUE,dispPlaces = TRUE,dispRails = FALSE,ggrObject = df$info)
+markers <- geo_marker_builder(dispRoads = TRUE,
+                              dispWater = TRUE,
+                              dispPlaces = TRUE,
+                              dispRails = FALSE,
+                              ggrObject = df$info)
 ```
 
 ### Report for: **`r df$info$name`**
@@ -102,7 +93,7 @@ mapper(geography="tract",
        MapTitle = "",
        LegendTitle = "",
        geosObject = geosObject,
-       varsObject = ACS,
+       censusVars = censusVars,
        markers = markers,
        verbose=TRUE)
 ```
@@ -127,7 +118,7 @@ tabler(df,
        year=2021,
        tableID = "B02001",
        pdf=TRUE,
-       varsObject = ACS,
+       censusVars = censusVars,
        usCompare = usCompare)
 ```
 
@@ -136,9 +127,8 @@ stat_helper(df,
             stat_table,
             tableID = "B02001",
             verbose=TRUE,
-            dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS,
+            dataType = 4, 
+            censusVars = censusVars,
             typeFilter = 2
 )
 ```
@@ -149,7 +139,7 @@ tabler(df,
        variables=variables,
        tableID = "B03002",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = usCompare)
 ```
 
@@ -159,8 +149,7 @@ stat_helper(df,
             tableID = "B03002",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS,
+            censusVars=censusVars,
             typeFilter = "level_1"
 )
 ```
@@ -177,7 +166,7 @@ tabler(df,
        variables=variables,
        tableID = "B11012",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = usCompare)
 ```
 
@@ -187,8 +176,7 @@ stat_helper(df,
             tableID = "B11012",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS,
+            censusVars=censusVars,
             typeFilter = "summary"
 )
 ```
@@ -208,7 +196,7 @@ mapper(geography="tract",
        LegendTitle = "",
        interactive = FALSE,
        dispPerc = TRUE,
-       varsObject = ACS,,
+       censusVars=censusVars,
        geosObject = geosObject,
        markers = markers)
 ```
@@ -228,7 +216,7 @@ mapper(geography="tract",
        LegendTitle = "",
        interactive = FALSE,
        dispPerc = TRUE,
-       varsObject = ACS,
+       censusVars=censusVars,
        geosObject = geosObject,
        markers = markers)
 ```
@@ -247,7 +235,7 @@ tabler(df,
        variables=variables,
        tableID = "B19001",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = usCompare)
 ```
 
@@ -257,8 +245,7 @@ stat_helper(df,
             tableID = "B19001",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS
+            censusVars=censusVars,
             )
 ```
 
@@ -277,7 +264,7 @@ mapper(geography="tract",
        LegendTitle = "",
        interactive = FALSE,
        dispPerc = FALSE,
-       varsObject = ACS,
+       censusVars=censusVars,
        geosObject = geosObject,
        markers = markers)
 ```
@@ -290,7 +277,7 @@ tabler(df,
        variables=variables,
        tableID = "B25070",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = usCompare)
 ```
 
@@ -300,8 +287,7 @@ stat_helper(df,
             tableID = "B25070",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,            
-            ACS.VARS = ACS.VARS
+            censusVars=censusVars
 )
 ```
 
@@ -315,7 +301,7 @@ tabler(df,
        variables=variables,
        tableID = "B17001",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = usCompare
 )
 ```
@@ -326,8 +312,7 @@ stat_helper(df,
             tableID = "B17001",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS
+            censusVars=censusVars
 )
 ```
 
@@ -346,7 +331,7 @@ mapper(geography="tract",
        LegendTitle = "",
        interactive = FALSE,
        dispPerc = TRUE,
-       varsObject = ACS,
+       censusVars=censusVars,
        geosObject = geosObject,
        markers = markers)
 ```
@@ -359,7 +344,7 @@ tabler(df,
        variables=variables,
        tableID = "B22003",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = usCompare)
 ```
 
@@ -369,8 +354,7 @@ stat_helper(df,
             tableID = "B22003",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS,
+            censusVars=censusVars,
             typeFilter = "summary"
 )
 ```
@@ -385,7 +369,7 @@ tabler(df,
        variables=variables,
        tableID = "B23025",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = usCompare,
        stateCompare = stateCompare,
        sort=FALSE,
@@ -398,8 +382,7 @@ stat_helper(df,
             tableID = "B23025",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS
+            censusVars=censusVars
 )
 ```
 
@@ -411,7 +394,7 @@ tabler(df,
        variables=variables,
        tableID = "B08126",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = usCompare,
        stateCompare = stateCompare,
        sort=TRUE)
@@ -423,8 +406,7 @@ stat_helper(df,
             tableID = "B08126",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS
+            censusVars=censusVars
 )
 ```
 
@@ -436,7 +418,7 @@ tabler(df,
        variables=variables,
        tableID = "B08101",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = usCompare,
        stateCompare = stateCompare,
        summaryLevels = 2,
@@ -449,8 +431,7 @@ stat_helper(df,
             tableID = "B08101",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS
+            censusVars=censusVars
 )
 ```
 
@@ -469,7 +450,7 @@ mapper(geography="tract",
        LegendTitle = "",
        interactive = FALSE,
        dispPerc = TRUE,
-       varsObject = ACS,
+       censusVars=censusVars,
        geosObject = geosObject,
        markers = markers)
 ```
@@ -490,7 +471,7 @@ mapper(geography="tract",
        LegendTitle = "",
        interactive = FALSE,
        dispPerc = TRUE,
-       varsObject = ACS,
+       censusVars=censusVars,
        geosObject = geosObject,
        markers = markers)
 ```
@@ -503,7 +484,7 @@ tabler(data_object = df,
        variables=variables,
        tableID = "B23020",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = NULL,
        stateCompare=NULL,
        summaryLevels = 2,
@@ -518,8 +499,7 @@ stat_helper(df,
             tableID = "B23020",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS
+            censusVars=censusVars
 )
 ```
 
@@ -534,7 +514,7 @@ tabler(df,
        year=2021,
        variables=variables,
        tableID = "B05001",
-       varsObject=ACS,
+       censusVars=censusVars,
        pdf=TRUE,
        usCompare = usCompare)
 ```
@@ -545,8 +525,7 @@ stat_helper(df,
             tableID = "B05001",
             verbose=TRUE,
             dataType = 4,            
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS
+            censusVars=censusVars
 )
 ```
 
@@ -566,7 +545,7 @@ mapper(geography="tract",
        LegendTitle = "",
        interactive = FALSE,
        dispPerc = TRUE,
-       varsObject = ACS,
+       censusVars=censusVars,
        geosObject = geosObject,
        markers = markers)
 ```
@@ -581,7 +560,7 @@ tabler(df,
        variables=variables,
        tableID = "B06003",
        pdf=TRUE,
-       varsObject=ACS,
+       censusVars=censusVars,
        usCompare = usCompare)
 ```
 
@@ -591,8 +570,7 @@ stat_helper(df,
             tableID = "B06003",
             verbose=TRUE,
             dataType = 4,             
-            ACS.TABLES = ACS.TABLES,             
-            ACS.VARS = ACS.VARS
+            censusVars=censusVars
 )
 ```
 
@@ -603,7 +581,7 @@ The data from this report is sourced from the American Community Survey (ACS). W
 This report queries `r length(params$tableID)` concepts in the ACS. They are listed here for reference:
 
 ```{r ACS.TABLES Table}
-   flextable(ACS.TABLES %>% filter(table_id %in% params$tableID),
+   flextable(censusVars[[2]] %>% filter(table_id %in% params$tableID),
              col_keys = c("table_id","concept")) %>% 
    theme_booktabs() %>% 
    width(j="concept",width=4) %>% 
