@@ -140,7 +140,7 @@ mapper <- function(mapDF=NULL,
 ){
 
   ## Deal with "no visible binding for global variable" error 
-  estimate  <- pct <- value <- concept <- block_group <- GEOID <- NULL
+  estimate  <- pct <- value <- concept <- block_group <- GEOID <- NAMELSAD <- NULL
   
   # Internal functions ------------------------------------------------------
 
