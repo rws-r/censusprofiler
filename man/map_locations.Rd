@@ -8,6 +8,8 @@ map_locations(
   addressList,
   state = NULL,
   county = NULL,
+  density = FALSE,
+  density_col = NULL,
   geosObject = NULL,
   verbose = FALSE
 )

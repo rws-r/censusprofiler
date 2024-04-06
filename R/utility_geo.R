@@ -1413,6 +1413,9 @@ build_map <- function(mapDF=NULL,
 #' @export
 #'
 #' @import tmap
+#' @importFrom sf st_filter
+#' @importFrom sf st_intersects
+#' @import cowplot
 #'
 #' @examples \dontrun{
 #' map_locations(addressList)
@@ -1421,6 +1424,8 @@ build_map <- function(mapDF=NULL,
 map_locations <- function(addressList,
                           state = NULL,
                           county = NULL,
+                          density = FALSE,
+                          density_col = NULL,
                           geosObject = NULL,
                           verbose = FALSE){
   
@@ -1455,12 +1460,127 @@ map_locations <- function(addressList,
   }
   
   geo_states <- geo_states %>% filter(STATEFP <= 56)
-  geo_states <- st_transform(geo_states,2163)
   
-  ##TODO make insets for alaska and Hawaii
-  tm_basemap(server=providers$Stadia.StamenTonerLite) +
-    tm_shape(geo_states) +
-    tm_polygons() + 
-    tm_shape(addressList) +
-    tm_dots() 
+  if(density==TRUE){
+    if(is.null(density_col)){
+      message("Getting densities...")
+      for(i in 1:nrow(addressList)){
+        message(paste("Attempt ",i,sep=""))
+        if(st_is_empty(addressList[i,])){
+          addressList[i,"state_density"] <- NA
+        }else{
+          state <- st_filter(geo_states,addressList[i,],.predicate=st_contains)
+          addressList[i,"state_density"] <- state$STATEFP
+        }
+      }
+      dens <- as.data.frame(table(addressList$state_density))
+      names(dens) <- c("state_density","frq")
+      dens$state_density <- as.character(dens$state_density)
+      geo_states <- left_join(geo_states,dens,join_by(STATEFP==state_density))
+    }else{
+      addressList <- addressList %>% mutate(state_density = get(density_col))
+      dens <- as.data.frame(table(addressList$state_density))
+      names(dens) <- c("state_density","frq")
+      if(length(dens[1,"state_density"])>2){
+        if(is.na(is.numeric(dens[1,"state_density"]))){
+          dcol <- "NAME"
+        }else{
+          stop("Invalid density_col parameter. Must be either FIPS, state abbr., or full state name.")
+        }
+      }else{
+        if(is.na(is.numeric(dens[1,"state_density"]))){
+          dcol <- "STATEFP"
+        }else{
+          dcol <- "STUSPS"
+        }
+      }
+      dens$state_density <- as.character(dens$state_density)
+      geo_states <- merge(geo_states,dens,by.x=dcol,by.y="state_density",all.x=T)
+      geo_states <- geo_states %>% mutate(frq = ifelse(is.na(frq),0,frq))
+    }
+  }
+  
+  ## Create inset for national map
+  if(length(unique(geo_states$STATEFP %in% c("02","15")))>1){
+    inset <- TRUE
+    cont_states <- geo_states %>% filter(!(STATEFP %in% c("02","15")))
+    cont_address <- st_filter(addressList,cont_states)
+    AK <- geo_states %>% filter(STATEFP=="02")
+    AK_address <- st_filter(addressList,AK,)
+    HI <- geo_states %>% filter(STATEFP=="15")
+    HI_address <- st_filter(addressList,HI)
+    cont_states <- st_transform(cont_states,2163)
+   # cont_address <- st_transform(cont_states,2163)
+    AK <- st_transform(AK,3338)
+    #AK_address <- st_transform(AK_address,3338)
+    HI <- st_transform(HI,6629)
+    #HI_address <- st_transform(HI_address,6629)
+  }else{
+    inset <- FALSE
+    cont_states <- geo_states
+    cont_states <- sf::st_transform(geo_states,2163)
+    cont_address <- addressList
+  }
+
+    cont_states <- tmap::tm_basemap(server=providers$Stadia.StamenTonerLite) +
+      {if(density==TRUE){
+        tmap::tm_shape(cont_states) +
+          tmap::tm_polygons("frq") 
+        }else{
+          tmap::tm_shape(cont_states) +
+            tmap::tm_polygons() 
+      }} + 
+      {if(density==FALSE){
+        tmap::tm_shape(cont_address) +
+          tmap::tm_dots()
+      }}
+    
+    if(nrow(AK_address)>0){
+    AK_states <- tmap::tm_basemap(server=providers$Stadia.StamenTonerLite) +
+      {if(density==TRUE){
+        tmap::tm_shape(AK) +
+          tmap::tm_polygons("frq") 
+      }else{
+        tmap::tm_shape(AK) +
+          tmap::tm_polygons() 
+      }} + 
+      {if(density==FALSE){
+        tmap::tm_shape(AK_address) +
+          tmap::tm_dots()
+      }}
+    }else{
+      AK_states <- NULL
+    }
+    
+    if(nrow(HI_address)>0){
+    HI_states <- tmap::tm_basemap(server=providers$Stadia.StamenTonerLite) +
+      {if(density==TRUE){
+        tmap::tm_shape(HI) +
+          tmap::tm_polygons("frq") 
+      }else{
+        tmap::tm_shape(HI) +
+          tmap::tm_polygons() 
+      }} + 
+      {if(density==FALSE){
+        tmap::tm_shape(HI_address) +
+          tmap::tm_dots()
+      }}
+    }else{
+      HI_states <- NULL
+    }
+    
+    cont_tmap <- tmap::tmap_grob(cont_states)
+    if(!is.null(AK_states))AK_tmap <- tmap::tmap_grob(AK_states)
+    if(!is.null(HI_states))HI_tmap <- tmap::tmap_grob(HI_states)
+    
+    cowplot::ggdraw() + 
+      cowplot::draw_plot(cont_tmap) + 
+      {if(!is.null(AK_states)){cowplot::draw_plot(AK_tmap,
+                         height=0.3,
+                         x=-0.3)}} + 
+      {if(!is.null(HI_states)){cowplot::draw_plot(HI_tmap,
+                                                height=0.3,
+                                                x=0.3)}}
+      
+    
 }
