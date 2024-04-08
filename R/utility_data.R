@@ -1,157 +1,5 @@
-# get_census_variables-------------------------------
-
-#' Get Census Variables
-#' 
-#' Sends a JSON request to the Census API to capture variables for use in 
-#' other functionality.
-#'
-#' @param year Year for variable draw
-#' @param dataset_main Main dataset parameter (e.g., 'acs' or 'dec')
-#' @param dataset_sub Secondary dataset parameter (e.g., 'acs5')
-#' @param dataset_last Tertiary dataset parameter (e.g., 'cprofile' or 'subject')
-#' @param detailed_tagging Logical, to flag additional data for dataframe.
-#' @param directory Logical, to grab list of all datasets available in census API
-#' @param verbose Logical parameter to signal verbose output.
-#'
-#' @return A dataframe
-#' @export
-#'
-#' @examples
-#' \dontrun{
-#' get_census_variables(year=2022, dataset_main="acs", dataset_sub="acs5")
-#' }
-get_census_variables <- function(year=NULL,
-                                 dataset_main=NULL,
-                                 dataset_sub=NULL,
-                                 dataset_last=NULL,
-                                 detailed_tagging=FALSE,
-                                 directory=FALSE,
-                                 verbose=FALSE
-){
-  
-  dt <- name <- concept <- NULL
-  
-  if(directory==FALSE){ 
-    url <- "http://api.census.gov"
-    pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last,"variables")
-    path <- paste(pathElements,collapse="/")
-    
-    cv <- httr::GET(url,
-                    path=path)
-    
-    if(httr::status_code(cv)!=200){
-      stop(paste("!> There was an error in the GET call / json text. ERROR",httr::status_code(dt)))
-    }
-    
-    if(verbose==TRUE)message(paste("Cleaning data and formatting to dataframe..."))
-    
-    cv <- httr::content(cv,as="text")
-    cv <- jsonlite::fromJSON(cv)
-    cv <- as.data.frame(cv)
-    colnames(cv) <- cv[1,]
-    cv <- cv[-1,]
-
-    if(verbose==TRUE)message(paste("Reshaping data..."))
-    ## Filter out the extraneous rows.
-    if(grepl("acs",dataset_main,ignore.case = TRUE)==TRUE){
-      cv <- cv[grepl("Estimate!!*",cv$label)==TRUE,] 
-    }else{
-      cv <- subset(cv,grepl("!!Total*",cv$label) | 
-                grepl("!!Median*",cv$label))
-    }
-    
-    ## Sort by ascending `name`
-    cv <- cv[order(cv$name),]
-    
-    ## Clean up variable names
-    cv$name <- substr(cv$name,1,nchar(cv$name)-1)
-    
-    ## Add nice extra info.
-    cv <- cv %>% dplyr::mutate(table_id=gsub('(_*?)_.*','\\1',name),
-                               varID=gsub(".*_","",name),
-                               calculation = case_when(
-                                 stringr::str_detect(concept,"(?i)MEDIAN")==TRUE ~ "median",
-                                 stringr::str_detect(concept,"(?i)MEAN ")==TRUE ~ "mean",
-                                 stringr::str_detect(concept,"(?i)AVERAGE")==TRUE ~ "mean",
-                                 .default = "count"),
-                               type = case_when(
-                                 stringr::str_count(label,"!!") == 1 ~ "root",
-                                 stringr::str_count(label,"!!") == 2 ~ "summary",
-                                 stringr::str_count(label,"!!") == 3 ~ "level_1",
-                                 stringr::str_count(label,"!!") == 4 ~ "level_2",
-                                 stringr::str_count(label,"!!") == 5 ~ "level_3",
-                                 stringr::str_count(label,"!!") == 6 ~ "level_4",
-                                 .default = "other"
-                               ),
-                               type_base = case_when(
-                                 str_count(label,"!!") == 1 ~ "root",
-                                 str_count(label,"!!") > 1 ~ "vars",
-                                 .default = "other"
-                               ))
-    
-    if(detailed_tagging==TRUE){
-      if(verbose==TRUE)message("     Creating detailed tagging...")
-      if(verbose==TRUE)pb <- txtProgressBar(min = 1, max = nrow(cv), style = 3)
-      for(i in 1:nrow(cv)){
-        x <- cv[i,'name']
-        pre <- case_when(
-          stringr::str_starts(x,"B") ~ "B",   # Detailed Tables: Base Table
-          stringr::str_starts(x,"CP") ~ "CP", # Comparison Profile
-          stringr::str_starts(x,"C") ~ "C",   # Detailed Tables: Collapsed Table
-          stringr::str_starts(x,"S") ~ "S",   # Subject Table
-          stringr::str_starts(x,"DP") ~ "DP", # Data Profile
-          stringr::str_starts(x,"S0201") ~ "S0201",# Selected Population Profile
-          #stringr::str_starts(x,"R") ~ "",    # Ranking Table (TODO this and below exist, but can't find them rn)
-          #stringr::str_starts(x,"GCT") ~ "",  # Geographic Comparison Table
-          #stringr::str_starts(x,"K20") ~ "",  # Supplemental Table
-          #stringr::str_starts(x,"XK") ~ "",   # Experimental Estimates
-          #stringr::str_starts(x,"NP") ~ "",   # Narrative Profile
-          .default = "UNKNOWN"
-        )
-        
-        post <- str_sub(unlist(stringr::str_split(x,"_"))[1],-1,-1)
-        
-        cv[i,'table_type'] <- pre
-        cv[i,'sub_table'] <- post
-        
-        if(verbose==TRUE)setTxtProgressBar(pb, i)
-      }
-      if(verbose==TRUE)close(pb)
-    }
-    
-    cvt <- unique(cv[c("table_id","concept","calculation")])
-    cvlist <- list(variables = cv, groups = cvt)
-    return(cvlist)
-    
-  }else{
-    url <- "http://api.census.gov"
-    pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last)
-    path <- paste(pathElements,collapse="/")
-    
-    dir <- httr::GET("http://api.census.gov",
-                    path=path)
-    
-    if(httr::status_code(dir)!=200){
-      stop(paste("!> There was an error in the GET call / json text. ERROR",httr::status_code(dt)))
-    }
-    
-    if(verbose==TRUE)message(paste("Cleaning data and formatting to dataframe..."))
-    
-    dir <- httr::content(dir,as="text")
-    dir <- jsonlite::fromJSON(dir)
-    dir <- as.data.frame(dir)
-
-    dir <- dir[c('dataset.c_vintage',
-                 'dataset.c_dataset',
-                 'dataset.title',
-                 'dataset.description')]
-    
-    ## Sort by ascending `name`
-    dir <- dir[order(dir$dataset.c_vintage),]
-    
-    return(dir)
-  }
-}
+###____Utility-Data____ ----
+# Miscellaneous data functions for censusprofiler.
 
 # comparison_helper -------------------------------------------------------
 ## TODO The download doesn't work for states. I need to fix this.
@@ -272,7 +120,7 @@ comparison_helper <- function(df=NULL,
 #' variables = profile_variables,tableID = profile_tableID)
 #' }
 create_comparison_data <- function(
-  #geo_list = NULL,
+    #geo_list = NULL,
   geography=NULL,
   profileDataset=NULL,
   year=NULL,
@@ -305,27 +153,27 @@ create_comparison_data <- function(
     }
   }
   
- if(geography=="state"){
-  # If a profile dataset is supplied, pull coords to filter state / county. 
-  # Otherwise, just get states list.
-  if(!is.null(profileDataset)){
-    if(verbose==TRUE)message("Using profileDataset to get df from ggr...")
-    df <- get_geocode_radius(filterRadius = 1,geography="tract",coords=profileDataset$info$coordinates,verbose=verbose)
-    state <- df$states
-  }
-  # Filter geo_list for only the 50 states. Not territories.
-   if(verbose==TRUE)message("Filtering down to 50 states...")
-  geo_list <- geo_var_builder(geography="state", try="local",geosObject = geosObject,verbose=verbose)
-  if(test==TRUE){
-    df <- geo_list$geo_states %>% filter(GEOID==56) 
-  }else{
+  if(geography=="state"){
+    # If a profile dataset is supplied, pull coords to filter state / county. 
+    # Otherwise, just get states list.
     if(!is.null(profileDataset)){
-      df <- geo_list$geo_states %>% filter(GEOID==state)  
+      if(verbose==TRUE)message("Using profileDataset to get df from ggr...")
+      df <- get_geocode_radius(filterRadius = 1,geography="tract",coords=profileDataset$info$coordinates,verbose=verbose)
+      state <- df$states
+    }
+    # Filter geo_list for only the 50 states. Not territories.
+    if(verbose==TRUE)message("Filtering down to 50 states...")
+    geo_list <- geo_var_builder(geography="state", try="local",geosObject = geosObject,verbose=verbose)
+    if(test==TRUE){
+      df <- geo_list$geo_states %>% filter(GEOID==56) 
     }else{
-      df <- geo_list$geo_states %>% filter(GEOID<=56) 
-    } 
+      if(!is.null(profileDataset)){
+        df <- geo_list$geo_states %>% filter(GEOID==state)  
+      }else{
+        df <- geo_list$geo_states %>% filter(GEOID<=56) 
+      } 
+    }
   }
- }
   
   if(verbose==TRUE)message("Getting CV...")
   if(is.null(censusVars)){ 
@@ -366,14 +214,14 @@ create_comparison_data <- function(
       
       if(st_is_empty(df[i,])==FALSE){
         x <- profiler(name = paste("State Comparison Info: ",df[i,]$NAME,sep=""),
-                        tableID = tableID,
-                            variables = variables,
-                            year=year,
-                            state=df[i,]$STATEFP,
-                            geography=geography,
-                            geosObject = geosObject,
-                            #coords=st_coordinates(df[i,]),
-                            verbose=verbose)
+                      tableID = tableID,
+                      variables = variables,
+                      year=year,
+                      state=df[i,]$STATEFP,
+                      geography=geography,
+                      geosObject = geosObject,
+                      #coords=st_coordinates(df[i,]),
+                      verbose=verbose)
       }else{
         x <- "MISSING ACCURATE GEODATA"
       }
@@ -412,7 +260,39 @@ create_comparison_data <- function(
   
 }
 
-# Entropy Index -------------------------
+# dateInputCheck---------------------
+dateInputCheck <- function(year = NULL,
+                           dataset_main="acs",
+                           dataset_sub="acs5",
+                           dataset_last=NULL,
+                           censusVars=NULL,
+                           verbose=FALSE){
+  if(is.null(year)){
+    ## If datatype=="acs", set to year - 2, as this seems to be a safe bet for released data from CV.
+    ## If decennial, round down to nearest decade.
+    cvsets <- c("acs1","acs3","acs5")
+    decsets <- c("ddhca","dhc","dp","pl","pes","dhcas","cd118")
+    if(dataset_sub %in% cvsets){
+      year <- as.numeric(format(as.Date(Sys.Date(), format="%d/%m/%Y"),"%Y"))-2
+    }else if(dataset_sub %in% decsets){
+      year <- floor(as.numeric(format(as.Date(Sys.Date(), format="%d/%m/%Y"),"%Y"))/10)*10
+    }else{
+      stop("!> No year supplied, and no valid census dataset supplied.")
+    }
+    
+    if(verbose==TRUE)message(paste("!> FYI: No year supplied...setting default to ",
+                                   year,". Change this by adding manually.",sep=""))
+  }
+  return(year)
+}
+
+# dur--------------------------------------
+dur <- function(st){
+  x <- paste(format(round(difftime(Sys.time(),st,units = "sec"),4),scientific=FALSE)," | ")
+  return(x)
+}
+
+# entropyIdex -------------------------
 #' Entropy Index 
 #' 
 #' A statistical function to estimate diversity / segregation in datasets.
@@ -516,7 +396,7 @@ entropyIndex <- function(data=NULL,
     viC <- varInputCheck(tableID=tableID,variables=variables)
     variables <- viC$variables
   }
-
+  
   ## Create data object if does not exist
   if(is.null(data)){
     data <- profiler(year=year,
@@ -554,18 +434,18 @@ entropyIndex <- function(data=NULL,
   if(!(tableID %in% data$table_id)){
     stop("That tableID does not exist in the data provided.")
   }
-
+  
   ## Data Cleaning and preparation
   if(verbose==TRUE)message("   - EI: cleaning data...")
   if(dataType!="vector"){
     data <- data %>% ungroup() %>% select(table_id,variable,year,concept,labels,estimate,subtotal,pct,name,geoid,geography,type)
     data <- data %>% filter(table_id==tableID)
-
+    
     if(!is.null(variables)){
       data <- data %>% filter(variable %in% variables) 
     }
     data <- data %>% filter(!is.na(pct))
-
+    
     # Create empty entropy table to populate.
     entropyTableNames <- c("table_id","year","concept","name","geoid","geography","pct","entropyIndex","multiGroupEntropyIndex")
     entropyTable <- data.frame(matrix(ncol = length(names(entropyTableNames)),nrow = 0))
@@ -574,9 +454,9 @@ entropyIndex <- function(data=NULL,
   
   ## Get whole-area entropy estimates / entropy index
   # Combine populations
-  area <- data %>% group_by(labels,variable) %>% summarize(est_total = sum(estimate),
-                                                  sub_total = sum(subtotal),
-                                                  areaPct = est_total/sub_total)
+  area <- data %>% dplyr::group_by(labels,variable) %>% dplyr::summarize(est_total = sum(estimate),
+                                                           sub_total = sum(subtotal),
+                                                           areaPct = est_total/sub_total)
   
   areaPopulation <- unique(area$sub_total)
   
@@ -657,68 +537,68 @@ entropyIndex <- function(data=NULL,
           if(verbose==TRUE)message(paste("   - EI:       looping through geoids; it #",g))
           if(verbose==TRUE)message(paste("   - EI:       filtering by geoid..."))
           d <- df %>% filter(geoid==gid[g])
-        
-        if(verbose==TRUE)message(paste("   - EI:       building vector..."))
-        vector <- d[[longCol]]
-        
-        maxEntropy <- log(length(vector))
-        
-        if(verbose==TRUE)message(paste("   - EI:       running processEntropy()..."))
-        ESLIST <- processEntropy(vector,return=TRUE,verbose=verbose)
-        SES <- ESLIST$SES
-        ES <- ESLIST$ES
-        
-        ## Dissimilarity Index
-        if(!is.null(dissimilarityValue)){
-          if(is.numeric(dissimilarityValue)){
-            dv <- paste(tableID,"_",sprintf("%03d",dissimilarityValue),sep="")
-          }else{
-            dv <- dissimilarityValue
-          }
-          dvd <- d %>% filter(variable==dv)
-          ti <- dvd$estimate
-          pi <- dvd$pct
-          To <- areaPopulation
-          ad <- area %>% filter(variable==dv)
-          P <- ad$areaPct
           
-          dsi <- (ti * abs(pi-P)) / (2*To*P*(1-P))
-          DI <- DI+dsi
-        }else{
-          DI <- NULL
-        }
-        
-        ## Exposure / Isolation Index
-        if(!is.null(dissimilarityValueB)){
-          if(is.numeric(dissimilarityValueB)){
-            dvb <- paste(tableID,"_",sprintf("%03d",dissimilarityValueB),sep="")
-          }else{
-            dvb <- dissimilarityValueB
-          }
-          eidA <- d %>% filter(variable==dv)
-          eidB <- d %>% filter(variable==dvb)
-          xi <- eidA$estimate
-          yi <- eidB$estimate
-          ti <- eidA$subtotal
-          To <- areaPopulation
-          aeid <- area %>% filter(variable==dv)
-          X <- aeid$est_total
-
-          exv <- (xi/X)*(yi/ti)
-          EXI <- EXI+exv
-          iiv <- (xi/X)*(xi/ti)
-          II <- II+iiv
+          if(verbose==TRUE)message(paste("   - EI:       building vector..."))
+          vector <- d[[longCol]]
           
-        }else{
-          EXI <- NULL
-          II <- NULL
-        }
-  
-        # Remove pct col and get summary row
-        d <- d %>% select(table_id,year,concept,name,geoid,geography,subtotal)
-        d <- unique(d)
-        d <- d %>% mutate(maxEntropy = maxEntropy, entropyScore = ES, standardizedEntropyScore = SES)
-        entropyTable <- rbind(entropyTable,d)
+          maxEntropy <- log(length(vector))
+          
+          if(verbose==TRUE)message(paste("   - EI:       running processEntropy()..."))
+          ESLIST <- processEntropy(vector,return=TRUE,verbose=verbose)
+          SES <- ESLIST$SES
+          ES <- ESLIST$ES
+          
+          ## Dissimilarity Index
+          if(!is.null(dissimilarityValue)){
+            if(is.numeric(dissimilarityValue)){
+              dv <- paste(tableID,"_",sprintf("%03d",dissimilarityValue),sep="")
+            }else{
+              dv <- dissimilarityValue
+            }
+            dvd <- d %>% filter(variable==dv)
+            ti <- dvd$estimate
+            pi <- dvd$pct
+            To <- areaPopulation
+            ad <- area %>% filter(variable==dv)
+            P <- ad$areaPct
+            
+            dsi <- (ti * abs(pi-P)) / (2*To*P*(1-P))
+            DI <- DI+dsi
+          }else{
+            DI <- NULL
+          }
+          
+          ## Exposure / Isolation Index
+          if(!is.null(dissimilarityValueB)){
+            if(is.numeric(dissimilarityValueB)){
+              dvb <- paste(tableID,"_",sprintf("%03d",dissimilarityValueB),sep="")
+            }else{
+              dvb <- dissimilarityValueB
+            }
+            eidA <- d %>% filter(variable==dv)
+            eidB <- d %>% filter(variable==dvb)
+            xi <- eidA$estimate
+            yi <- eidB$estimate
+            ti <- eidA$subtotal
+            To <- areaPopulation
+            aeid <- area %>% filter(variable==dv)
+            X <- aeid$est_total
+            
+            exv <- (xi/X)*(yi/ti)
+            EXI <- EXI+exv
+            iiv <- (xi/X)*(xi/ti)
+            II <- II+iiv
+            
+          }else{
+            EXI <- NULL
+            II <- NULL
+          }
+          
+          # Remove pct col and get summary row
+          d <- d %>% select(table_id,year,concept,name,geoid,geography,subtotal)
+          d <- unique(d)
+          d <- d %>% mutate(maxEntropy = maxEntropy, entropyScore = ES, standardizedEntropyScore = SES)
+          entropyTable <- rbind(entropyTable,d)
         }
       }
     }
@@ -727,7 +607,7 @@ entropyIndex <- function(data=NULL,
     AESLIST <- processEntropy(areaVector,return=TRUE,verbose=verbose)
     AES <- AESLIST$ES
     ASES <- AESLIST$SES
-
+    
     ## Develop entropy index (weighted average deviation of each unit's entropy from the 
     ## metropolitan-wide entropy, expressed as a fraction of the metropolitan area's total
     ## entropy.) "The entropy index varies between 0, when all areas have the same
@@ -737,7 +617,7 @@ entropyIndex <- function(data=NULL,
     ## the entropy index, being a measure of evenness, is not. Rather, it measures how evenly 
     ## groups are distributed across metropolitan area neighborhoods, regardless of the 
     ## size of each of the groups." (Iceland, p. 8)
-
+    
     EI <- 0
     for(et in 1:nrow(entropyTable)){
       t <- entropyTable[[et,"subtotal"]]
@@ -770,88 +650,160 @@ entropyIndex <- function(data=NULL,
   }
 }
 
-# varInputCheck---------------------
-varInputCheck <- function(tableID = NULL,
-                          variables = NULL,
-                          variableSummary = NULL,
-                          verbose=FALSE){
-  if(is.list(variables)){
-    if(is.null(names(variables))){
-      stop("Incorrect formatting. Variables must be formatted in a named list. E.g.: list(`B01001`=c(1:8)).")
-    }
-    tableID <- names(variables)
-  }
-  
-  newVars <- newVarsSum <- NULL 
-  if(is.null(tableID)){
-    if(is.null(variables)){
-      stop("Insufficient data: requires tableID and/or variables.")
-    }else if (is.numeric(variables)){
-      stop("Ambiguous variables supplied. Either provide whole variable names (`B01001_001`) or include a tableID.")
-    }
-  }else{
-    if(is.list(variables)){
-      for(t in 1:length(tableID)){
-        for(i in 1:length(variables[[t]])){
-          if(is.numeric(variables[[t]][i])==TRUE){
-            newVars <- c(newVars,paste(tableID[t],"_",sprintf("%03d",variables[[t]][i]),sep=""))
-          }
-        }
-      }
-    }else{
-      for(i in 1:length(variables)){
-        if(is.numeric(variables[i])==TRUE){
-          newVars <- c(newVars,paste(tableID,"_",sprintf("%03d",variables[i]),sep=""))
-        }
-      }
-    }
-  }
-  
-  if(is.null(tableID) && is.null(variableSummary)){ 
-    stop("Summary variable must be supplied. Or include tableID.")
-  }else{
-    for(v in 1:length(tableID)){   
-      if(is.null(variableSummary[v])){
-        newVarsSum <- c(newVarsSum,paste(tableID[v],"_",sprintf("%03d",1),sep=""))
-        if(verbose==TRUE)message(paste("No variableSummary supplied. Defaulting to ",tableID[v],"_",sprintf("%03d",1),sep=""))
-      }else{
-        if(is.numeric(variableSummary[v])){
-          newVarsSum <- c(newVarsSum,paste(tableID[v],"_",sprintf("%03d",variableSummary[v]),sep=""))
-        }
-      }
-    }
-  }
-  if(!is.null(newVars))variables <- newVars
-  if(!is.null(newVarsSum))variableSummary <- newVarsSum
-  return(list(tableID = tableID, variables = variables, variableSummary = variableSummary))
-}
+# get_census_variables-------------------------------
 
-# dateInputCheck---------------------
-dateInputCheck <- function(year = NULL,
-                           dataset_main="acs",
-                           dataset_sub="acs5",
-                           dataset_last=NULL,
-                           censusVars=NULL,
-                           verbose=FALSE){
-  if(is.null(year)){
-    ## If datatype=="acs", set to year - 2, as this seems to be a safe bet for released data from CV.
-    ## If decennial, round down to nearest decade.
-    cvsets <- c("acs1","acs3","acs5")
-    decsets <- c("ddhca","dhc","dp","pl","pes","dhcas","cd118")
-    if(dataset_sub %in% cvsets){
-      year <- as.numeric(format(as.Date(Sys.Date(), format="%d/%m/%Y"),"%Y"))-2
-    }else if(dataset_sub %in% decsets){
-      year <- floor(as.numeric(format(as.Date(Sys.Date(), format="%d/%m/%Y"),"%Y"))/10)*10
-    }else{
-      stop("!> No year supplied, and no valid census dataset supplied.")
+#' Get Census Variables
+#' 
+#' Sends a JSON request to the Census API to capture variables for use in 
+#' other functionality.
+#'
+#' @param year Year for variable draw
+#' @param dataset_main Main dataset parameter (e.g., 'acs' or 'dec')
+#' @param dataset_sub Secondary dataset parameter (e.g., 'acs5')
+#' @param dataset_last Tertiary dataset parameter (e.g., 'cprofile' or 'subject')
+#' @param detailed_tagging Logical, to flag additional data for dataframe.
+#' @param directory Logical, to grab list of all datasets available in census API
+#' @param verbose Logical parameter to signal verbose output.
+#'
+#' @return A dataframe
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' get_census_variables(year=2022, dataset_main="acs", dataset_sub="acs5")
+#' }
+get_census_variables <- function(year=NULL,
+                                 dataset_main=NULL,
+                                 dataset_sub=NULL,
+                                 dataset_last=NULL,
+                                 detailed_tagging=FALSE,
+                                 directory=FALSE,
+                                 verbose=FALSE
+){
+  
+  dt <- name <- concept <- NULL
+  
+  if(directory==FALSE){ 
+    url <- "http://api.census.gov"
+    pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last,"variables")
+    path <- paste(pathElements,collapse="/")
+    
+    cv <- httr::GET(url,
+                    path=path)
+    
+    if(httr::status_code(cv)!=200){
+      stop(paste("!> There was an error in the GET call / json text. ERROR",httr::status_code(dt)))
     }
     
-   if(verbose==TRUE)message(paste("!> FYI: No year supplied...setting default to ",
-                  year,". Change this by adding manually.",sep=""))
+    if(verbose==TRUE)message(paste("Cleaning data and formatting to dataframe..."))
+    
+    cv <- httr::content(cv,as="text")
+    cv <- jsonlite::fromJSON(cv)
+    cv <- as.data.frame(cv)
+    colnames(cv) <- cv[1,]
+    cv <- cv[-1,]
+    
+    if(verbose==TRUE)message(paste("Reshaping data..."))
+    ## Filter out the extraneous rows.
+    if(grepl("acs",dataset_main,ignore.case = TRUE)==TRUE){
+      cv <- cv[grepl("Estimate!!*",cv$label)==TRUE,] 
+    }else{
+      cv <- subset(cv,grepl("!!Total*",cv$label) | 
+                     grepl("!!Median*",cv$label))
+    }
+    
+    ## Sort by ascending `name`
+    cv <- cv[order(cv$name),]
+    
+    ## Clean up variable names
+    cv$name <- substr(cv$name,1,nchar(cv$name)-1)
+    
+    ## Add nice extra info.
+    cv <- cv %>% dplyr::mutate(table_id=gsub('(_*?)_.*','\\1',name),
+                               varID=gsub(".*_","",name),
+                               calculation = dplyr::case_when(
+                                 stringr::str_detect(concept,"(?i)MEDIAN")==TRUE ~ "median",
+                                 stringr::str_detect(concept,"(?i)MEAN ")==TRUE ~ "mean",
+                                 stringr::str_detect(concept,"(?i)AVERAGE")==TRUE ~ "mean",
+                                 .default = "count"),
+                               type = dplyr::case_when(
+                                 stringr::str_count(label,"!!") == 1 ~ "root",
+                                 stringr::str_count(label,"!!") == 2 ~ "summary",
+                                 stringr::str_count(label,"!!") == 3 ~ "level_1",
+                                 stringr::str_count(label,"!!") == 4 ~ "level_2",
+                                 stringr::str_count(label,"!!") == 5 ~ "level_3",
+                                 stringr::str_count(label,"!!") == 6 ~ "level_4",
+                                 .default = "other"
+                               ),
+                               type_base = dplyr::case_when(
+                                 str_count(label,"!!") == 1 ~ "root",
+                                 str_count(label,"!!") > 1 ~ "vars",
+                                 .default = "other"
+                               ))
+    
+    if(detailed_tagging==TRUE){
+      if(verbose==TRUE)message("     Creating detailed tagging...")
+      if(verbose==TRUE)pb <- txtProgressBar(min = 1, max = nrow(cv), style = 3)
+      for(i in 1:nrow(cv)){
+        x <- cv[i,'name']
+        pre <- dplyr::case_when(
+          stringr::str_starts(x,"B") ~ "B",   # Detailed Tables: Base Table
+          stringr::str_starts(x,"CP") ~ "CP", # Comparison Profile
+          stringr::str_starts(x,"C") ~ "C",   # Detailed Tables: Collapsed Table
+          stringr::str_starts(x,"S") ~ "S",   # Subject Table
+          stringr::str_starts(x,"DP") ~ "DP", # Data Profile
+          stringr::str_starts(x,"S0201") ~ "S0201",# Selected Population Profile
+          #stringr::str_starts(x,"R") ~ "",    # Ranking Table (TODO this and below exist, but can't find them rn)
+          #stringr::str_starts(x,"GCT") ~ "",  # Geographic Comparison Table
+          #stringr::str_starts(x,"K20") ~ "",  # Supplemental Table
+          #stringr::str_starts(x,"XK") ~ "",   # Experimental Estimates
+          #stringr::str_starts(x,"NP") ~ "",   # Narrative Profile
+          .default = "UNKNOWN"
+        )
+        
+        post <- str_sub(unlist(stringr::str_split(x,"_"))[1],-1,-1)
+        
+        cv[i,'table_type'] <- pre
+        cv[i,'sub_table'] <- post
+        
+        if(verbose==TRUE)setTxtProgressBar(pb, i)
+      }
+      if(verbose==TRUE)close(pb)
+    }
+    
+    cvt <- unique(cv[c("table_id","concept","calculation")])
+    cvlist <- list(variables = cv, groups = cvt)
+    return(cvlist)
+    
+  }else{
+    url <- "http://api.census.gov"
+    pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last)
+    path <- paste(pathElements,collapse="/")
+    
+    dir <- httr::GET("http://api.census.gov",
+                     path=path)
+    
+    if(httr::status_code(dir)!=200){
+      stop(paste("!> There was an error in the GET call / json text. ERROR",httr::status_code(dt)))
+    }
+    
+    if(verbose==TRUE)message(paste("Cleaning data and formatting to dataframe..."))
+    
+    dir <- httr::content(dir,as="text")
+    dir <- jsonlite::fromJSON(dir)
+    dir <- as.data.frame(dir)
+    
+    dir <- dir[c('dataset.c_vintage',
+                 'dataset.c_dataset',
+                 'dataset.title',
+                 'dataset.description')]
+    
+    ## Sort by ascending `name`
+    dir <- dir[order(dir$dataset.c_vintage),]
+    
+    return(dir)
   }
-  return(year)
 }
-
 
 # get_vre_table-----------------------------------
 
@@ -1029,7 +981,7 @@ get_vre_table <- function(
   
   # make common column for matching
   data <- data %>% mutate(geoid_full = paste(GEOID_Base,geoid,sep=""))
-
+  
   for(v in 1:vln){
     
     if(variableAgg==TRUE){
@@ -1087,6 +1039,366 @@ get_vre_table <- function(
   
 }
 
+# load_data---------------------------
+#' Load Data
+#' 
+#' A convenience function that loads functional data, including ACS variables, 
+#' a geos object, stats object, and/or geo profile comparison object. These are 
+#' created and then if selected, loaded into the global environment. 
+#'
+#' @param load_censusVars Logical param to capture census variables and concepts.
+#' @param load_geos Logical param to capture geos object.
+#' @param load_stats Logical param to create stats_object.
+#' @param load_profile_compare Logical param to create geo profile comparison object.
+#' @param geography Default geography option for stat_table_builder.
+#' @param geo_data Default geography options for load_geos.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
+#' @param loadToGlobal Logical param to save to global environment.
+#' @param year Default year for data calls.
+#' @param tableID ProfileList object for stat_table_builder.
+#' @param variables Variable list for stat_table_builder.
+#' @param verbose Logical param to provide feedback.
+#' @param geosObject Optional geosObject to speed up processing time.
+#' @param test Internal logical parameter to specify testing envir.
+#'
+#' @return data.frame objects loaded into global environment.
+#' 
+#' @export 
+#'
+#' @examples
+#' \dontrun{
+#' load_data(load_censusVars=TRUE, load_geos=TRUE,load_stats=TRUE,
+#' variables=profile_variables,tableID=profile_tableID)
+#' }
+load_data <- function(load_censusVars = FALSE,
+                      load_geos = FALSE,
+                      load_stats = FALSE,
+                      load_profile_compare = FALSE,
+                      geography = "tract",
+                      geo_data = c("state","county","tract"),
+                      dataset_main="acs",
+                      dataset_sub="acs5",
+                      dataset_last=NULL,
+                      censusVars=NULL,
+                      loadToGlobal = FALSE,
+                      year = 2021,
+                      tableID = NULL,
+                      variables = NULL,
+                      geosObject=NULL,
+                      test=FALSE,
+                      verbose=FALSE){
+  
+  ## Set all promised variables to NULL
+  CV <- CV.VARS <- CV.GROUPS <- NULL
+  
+  if(load_censusVars==TRUE){
+    if(verbose==TRUE)message("Getting CV...")
+    if(is.null(censusVars)){ 
+      CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+    }else{
+      CV <- censusVars
+    }
+    
+    if(loadToGlobal==TRUE){
+      CV <<- CV
+    }
+  }
+  if(load_geos==TRUE){
+    y <- geo_var_builder(geography=geo_data,try="local",verbose=verbose)
+    if(loadToGlobal==TRUE){
+      geos <<- y
+    }else{
+      geos <- y
+    }
+  }
+  if(load_stats==TRUE){
+    ifelse(test==TRUE,ss <- 55,NULL)
+    z <- stat_table_builder(year=year,
+                            data = NULL,
+                            master_list = TRUE,
+                            summary_table = TRUE,
+                            tableID = tableID,
+                            variables = variables,
+                            geography = "tract",
+                            geosObject = geosObject,
+                            stateStart = ss,
+                            test=TRUE,
+                            verbose=verbose
+    )
+    
+    if(loadToGlobal==TRUE){
+      profile_stats <<- z
+    }else{
+      profile_stats <- z
+    }
+  }
+  
+  if(load_profile_compare==TRUE){
+    s <- create_comparison_data(geography="state",
+                                profileDataset = NULL,
+                                year=2021,
+                                variables = variables,
+                                tableID = tableID, 
+                                geosObject = geosObject,
+                                test=TRUE,
+                                verbose = verbose)
+    
+    u <- create_comparison_data(geography="us",
+                                profileDataset = NULL,
+                                year=2021,
+                                variables = variables,
+                                tableID = tableID, 
+                                geosObject = geosObject,
+                                test=TRUE,
+                                verbose = verbose)
+    
+    
+    if(loadToGlobal==TRUE){
+      stateCompare <<- s
+      usCompare <<- u
+    }else{
+      stateCompare <- s
+      usCompare <- u
+    }
+  }
+  
+  if(loadToGlobal==FALSE){
+    dt <- list()
+    if(load_censusVars==TRUE)dt <- append(dt,list(CV=CV))
+    if(load_geos==TRUE)dt <- append(dt,list(geos=geos))
+    if(load_stats==TRUE)dt <- append(dt,list(stats=profile_stats))
+    if(load_profile_compare)dt <- append(dt,list(stateCompare=stateCompare,usCompare=usCompare))
+    return(dt)
+    on.exit(
+      if(load_censusVars==TRUE)rm(CV),
+      if(load_geos==TRUE)rm(geos),
+      if(load_stats==TRUE)rm(profile_stats))
+    if(load_profile_compare==TRUE)rm(stateCompare,usCompare)
+  }
+} 
+
+# profile_helper-------------------------
+
+#' Profile Helper
+#'
+#' A function designed to interactively create a vectorized list of selected
+#' variables to use for profiler() functionality. 
+#'
+#' @param year Year of call.
+#' @param tableID Vector with variables for inclusion.
+#' should be accessed.
+#' @param allCols Parameter to display all columns during review of variables 
+#' for selection.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
+#' @param test Internal: logical parameter to specificy testing environment.
+#' @param verbose Logical parameter to specify verbose output.
+#'
+#' @return Vector with variable values stored.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' profile_builder(tableID=tableID,addNumbering=TRUE)
+#' }
+profile_helper <- function(tableID=NULL,
+                           year=NULL,
+                           allCols=FALSE,
+                           dataset_main="acs",
+                           dataset_sub="acs5",
+                           dataset_last=NULL,
+                           censusVars=NULL,
+                           test=FALSE,
+                           verbose=FALSE){
+  
+  ## Deal with "no visible binding for global variable" error 
+  censusDataset <- table_id <- name <- label <- 
+    type <- NULL
+  
+  if(is.null(year)){
+    stop("You need to include a year.")
+  }
+  
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
+  
+  # if(addNumbering==TRUE){
+  # if(exists("profile_variables")){
+  #   message("It looks like you already have a profile_variables object created. \n Should we build on this? (yes) \n If (no), we'll start over. ")
+  #   ifelse(test==FALSE,
+  #          user_input <- readline(),
+  #          user_input <- "no")
+  #   if(user_input=="yes"){
+  #     profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
+  #     vbpv <- unique(as.vector(unlist(CV.VARS %>% filter(name %in% profile_variables) %>% select(table_id))))
+  #     profileVarsDF <- profileVarsDF %>% filter(!(table_id %in% vbpv))
+  #     profileVariableList <- profileVarsDF
+  #     tableID <- tableID[!(tableID %in% vbpv)]
+  #    }else{
+  #     profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
+  #     profileVariableList <- NULL
+  #    }
+  # }else{
+  profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
+  profileVariableList <- NULL
+  # }
+  for(i in 1:length(tableID)){
+    vb <- tableID[i]
+    dispVars <- profileVarsDF %>% filter(table_id==vb)
+    if(test==FALSE)message(cat("-----------\n table_id for review: ",unlist(unique(dispVars$concept)),"\n-----------\n"))
+    # Select columns; option to display all cols.
+    if(allCols==FALSE){
+      dispVars <- dispVars %>% select(name,label,type)
+    }
+    if(test==FALSE)print(dispVars,n=100)
+    ifelse(test==FALSE,
+           user_input <- readline("Which numbers do we want to keep? (`stop`,`all`,`type`,number array):"),
+           user_input <- "all")
+    if(user_input != 'stop'){
+      if(user_input=="type"){
+        user_input_b <- readline("Which type should we filter by? (array accepted)")
+        user_input_b <- unlist(strsplit(user_input_b,","))
+        # Check inputs
+        for(x in 1:length(user_input_b)){
+          if(user_input_b[x] %in% c("root","summary","level_1","level_2","level_3","level_4","other")==FALSE){
+            message(paste("Whoops, looks like ",user_input_b[x],"doesn't exist. Please start over and try again."))
+            #saveMe(test=test)
+            stop()
+          }
+        }
+        ui <- user_input_b
+        vC <- dispVars %>% filter(type %in% ui)
+        vC <- vC[["name"]]
+        profileVariableList <- c(profileVariableList,vC)
+        
+        
+      }else{
+        if(user_input=="all"){
+          ui <- c(1:nrow(dispVars))
+        }else{
+          ui <- eval(parse(text=paste("c(",user_input,")",sep="")))
+        }
+        vl <- NULL
+        for(v in 1:length(ui)){
+          vC <- paste(vb,"_",sprintf("%03d",ui[v]),sep="")
+          profileVariableList <- c(profileVariableList,vC)
+        }
+      }
+      
+    }else{
+      #saveMe(profileVariableList,test=test)
+      return(profileVariableList)
+    }
+    if(test==FALSE)message(cat(">> Variables added: ",profileVariableList))
+  }
+  ifelse(test = FALSE,
+         return(profileVariableList),
+         #checkSave(profileVariableList,test=test),
+         return(profileVariableList))
+  
+  # }else if(review==TRUE){
+  #   message("Parameter 'review' is unimplemented as of now.")
+  #   # #TODO Fix this.
+  #   # for(i in 1:length(tableID)){
+  #   #   print(capi("state",table_id=tableID[i],varStartNum = 1, year=2021,state="IL",
+  #   #                          plot = TRUE))
+  #   # 
+  #   #   user_input <- readline("Should I continue? (y/n)  ")
+  #   #   if(user_input != 'y') stop('Exiting since you did not press y')
+  #   # }
+  # }else{
+  # stop("You did not specify any arguments.")
+  # }
+}
+
+# pseudo_tableID--------------------------------------
+pseudo_tableID <- function(vars,
+                           fast=FALSE,
+                           test=FALSE,
+                           verbose=FALSE){
+  tid <- NULL
+  if(test==FALSE && verbose==TRUE && length(vars)>1)pb <- txtProgressBar(min = 1, max = length(vars), style = 3)
+  if(fast==FALSE){
+    for(v in 1:length(vars)){
+      if(str_detect(vars[v],"_")==FALSE || is.numeric(vars[v])){
+        ##TODO I'd like to make an autocorrect for this so we can just include numeric values.
+        stop("!> Insufficient data from variables to detect table_id. Please format variables in tableID+num_var format (i.e. `B01001_001`.")
+      }
+      tids <- stringr::str_split(vars[v],"_")
+      tids <- unlist(tids)[1]
+      tid <- c(tid,tids)
+      if(test==FALSE && verbose==TRUE && length(vars)>1)setTxtProgressBar(pb, v)
+    }
+  }else{
+    tid <- vapply(strsplit(vars,"_",fixed=TRUE),`[`,1,FUN.VALUE=character(1))
+  }
+  if(test==FALSE && verbose==TRUE && length(vars)>1)close(pb)
+  # Check for errors
+  # utid <- unique(tid)
+  # for(t in 1:length(utid)){
+  #   print(utid)
+  #   tidt <- tableID_pre_check(utid[t])
+  #   if(tidt[1]=="NOTFOUND"){
+  #     ##ADDTEST
+  #     stop("!> Malformed or unavailable table ID. Please correct.")
+  #   }
+  # }
+  return(tid)
+}
+
+# set_api_key----------------------
+#' Set API Key
+#' 
+#' Sets the API key for the US Census API (see
+#' https://api.census.gov/data/key_signup.html) into the global environment for
+#' reuse with censusprofiler.
+#'
+#' @param key The API key obtained for use with US Census Data API.
+#' @param test Internal, for testing purposes.
+#'
+#' @return A global environmental variable.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' set_api_key(APIKEYGOESHERE)
+#' }
+#' 
+set_api_key <- function(key=NULL,
+                        test=FALSE){
+  if(is.null(key)){
+    stop("No key provided. Try again.")
+  }
+  ## Check for existing key
+  if(test==FALSE){
+    if(("CENSUS_API_KEY" %in% names(Sys.getenv()))==TRUE){
+      message("API key already exists. Do you really want to override it? y/n")
+      user_input <- readline()
+      if(!(user_input %in% c("y","yes"))){
+        stop("OK, we won't update it.")
+      }else{
+        message("OK, updating.")
+        Sys.setenv("CENSUS_API_KEY" = key)
+      }
+    }else{
+      Sys.setenv("CENSUS_API_KEY" = key)
+    }
+  }else{ 
+      Sys.setenv("TEST_CENSUS_API_KEY" = key)
+    }
+  }
+
 # speedtest-----------------------------------
 
 #' Speedtest
@@ -1122,292 +1434,6 @@ speedtest <- function(x,y){
   print(data.frame(unit = c("capi","tidycensus"),time=c(a,b)))
 }
 
-# stat_table_builder-----------------------------------
-
-#' Utility: Stat Table Builder
-#' 
-#' A utility function for generating a dataframe object of all census tracts in 
-#' the United States, with variables from a variable list, Additionally, can calculate
-#' distribution statistics.
-#'
-#' @param year Year value for variable selection.
-#' @param data A data object generated by "master_list" set to TRUE, to create summary_table.
-#' @param summary_table Set to `TRUE` to create basic distribution statistics. 
-#' @param master_list Set to `TRUE` to download census tracts with variable list provided. 
-#' @param compiler Set to `TRUE` to stitch downloaded master list files into a single master file.
-#' @param variables Variable list (vector) object to pass to ACS call.
-#' @param geography Options to get "block group","tract","county" or "state".
-#' @param test Testing variable. Uses a limited data call for internal testing.
-#' @param tableID profileList object to pass to ACS call.
-#' @param geosObject Optional geosObject to speed up processing time.
-#' @param saveProgress Logical parameter to save individual downloaded files to
-#'   /data/ folder to reduce runtime and memory load.
-#' @param stateStart Related to saveProgress, if the process is interrupted, a 
-#' state FIPS code to begin the process at. 
-#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
-#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
-#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
-#' @param censusVars Passthrough object to bypass get_census_variables 
-#' @param verbose Logical parameter to specify whether to produce verbose output.   
-#'
-#' @importFrom stats sd
-#' @importFrom stats median
-#' @importFrom data.table rbindlist
-#'
-#' @return A dataframe.
-#'
-#' @examples
-#' \dontrun{
-#' # Run summary statistics.
-#' stat_table_builder(data=profile_all_summary_stats,
-#' summary_table=TRUE) 
-#' # Download all census tracts.
-#' stat_table_builder(master_list=TRUE) 
-#' }
-stat_table_builder <- function(year=NULL,
-                               data=NULL,
-                               summary_table=FALSE,
-                               master_list=FALSE,
-                               compiler=FALSE,
-                               tableID=NULL,
-                               variables=NULL,
-                               geography="tract",
-                               test=FALSE,
-                               geosObject=NULL,
-                               saveProgress=FALSE,
-                               stateStart=NULL,
-                               dataset_main="acs",
-                               dataset_sub="acs5",
-                               dataset_last=NULL,
-                               censusVars=NULL,
-                               verbose=FALSE){
-  
-  ## Deal with "no visible binding for global variable" error 
-  GEOID <- STATEFP <- COUNTYFP <- NULL
-  
-  if(verbose==TRUE)message("Getting CV...")
-  if(is.null(censusVars)){ 
-    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
-  }else{
-    CV <- censusVars
-  }
-  CV.VARS <- CV[[1]]
-  CV.GROUPS <- CV[[2]]
-  
-  if(compiler==TRUE){
-    relPath <- "data/statfiles/"
-      message("Setting file path...")
-      filepath <- relPath
-      message("Getting file list...")
-      filelist <- list.files(filepath)
-      datalist <- list()
-      message("Building file array...")
-      for(i in 1:length(filelist)){
-        message(paste(" > for",filelist[i]," [",round(i/length(filelist),2)*100,"%]..."))
-        name <- filelist[i]
-        dp <- list()
-        dp[[name]] <- readRDS(paste(filepath,filelist[i],sep=""))
-        datalist <- append(datalist,dp)
-      }
-      message("Binding data array into cumulative file...")
-      datafull <- data.table::rbindlist(datalist)
-      dffn <- paste(filepath,"stat_table_cumulative.RDS",sep="")
-      saveRDS(datafull,dffn)
-      if(exists(dffn))message("Saved cumulative data successfully.")
-  }else{
-    
-  ## Initial error checking
-  if(is.null(tableID)){
-    stop("You're going to need to supply a vector of tableIDs.")
-  }
-  
-    ## Since we're mainly interested in the summary df, we can do this in one shot, if summary_table==TRUE and data==NULL.
-    ## Otherwise, just download master_list, or rerun with master_list df and create summary table.
-    # Start by getting geos. 
-    
-    ##TODO clean this up to cohere with logic in geo_var_builder().
-    geo <- geo_var_builder(geography=geography,try="local",geosObject = geosObject)
-    
-    if(geography=="block group"){
-      #geos <- geo_var_builder(geography="block groups",try="local")
-      geo <- geo$geo_blocks
-    }else if(geography=="tract"){
-      #geos <- geo_var_builder(geography="tract",try="local")
-      geo <- geo$geo_tracts
-    }else if(geography=="county"){
-      #geos <- geo_var_builder(geography="county",try="local")
-      geo <- geo$geo_counties
-    }else if(geography=="state"){
-      #geos <- geo_var_builder(geography="state",try="local")
-      geo <- geo$geo_states
-    }else{
-      stop("Error: geography not specified")
-    }
-    
-    ## Get a list of states.
-    if(exists("geos",envir = .GlobalEnv)){
-      geos <- geos
-    }else{
-      geos <- geo_var_builder(geography="state",try="local")  
-    }
-    states <- geos$geo_states
-    states <- states %>% filter(GEOID<=56)
-    if(!is.null(stateStart))states <- states %>% filter(GEOID>=stateStart)
-    states <- as.vector(as.numeric(states$GEOID))
-    states <- sort(states)
-    ## Set params for testing suite. 
-    # if(test==TRUE){
-    #   states <- 17
-    #   county <- 043
-    #   if("STATEFP" %in% names(geo)){
-    #     geo <- geo %>% filter(STATEFP==states)
-    #   }
-    #   if("COUNTYFP" %in% names(geo)){
-    #     geo <- geo %>% filter(COUNTYFP==county)
-    #   }
-    # }else{
-       county <- NULL
-    # }
-    
-    if(master_list==TRUE & is.null(data)){
-      # Skip messaging if test is true
-      if(test==FALSE){
-        sizeRows <- nrow(geo)*length(variables)
-        sizeFile <- round((sizeRows*121)/10^9,3)
-        
-        if(summary_table==TRUE & is.null(data)){
-          user_input <- readline(stringr::str_wrap(paste("HEADS UP: This will generate a large dataframe (",format(sizeRows,big.mark=","),"rows; approx.",sizeFile,"GB). In addition, `summary_table=TRUE`, this will return ONLY the summary table.  For `master_list`, rerun with `master_list` set to TRUE. Proceed? (y/n)"),width=90))
-        }else{
-          user_input <- readline(
-            
-            stringr::str_wrap(paste("HEADS UP: This will generate a large dataframe (",format(sizeRows,big.mark=","),"rows; approx.",sizeFile,"GB). In addition, `summary_table=TRUE`, this will return ONLY the summary table.  For `master_list`, rerun with `master_list` set to TRUE. Proceed? (y/n)"),width=90))
-        }
-      }else{
-        user_input <- "y"
-      }
-      if(user_input!="y"){
-        stop("OK, quitting.")
-      }else{
-        ## Loop through profiler() requests by state and append to df.
-        data <- NULL
-        if(test==FALSE){
-          pb <- txtProgressBar(min = 1, max = length(states), style = 3)
-        }
-        for(i in 1:length(states)){
-          if(verbose==TRUE)message(paste("Iteration ",i,"/",length(states)," (",round(i/length(states),1)*100,"%)",sep=""))
-          x <- profiler(tableID = tableID,
-                        variables = variables,
-                        year=2022,
-                        state=states[i],
-                        county=county,
-                        geography=geography,
-                        verbose = verbose,
-                        censusVars = CV,
-                        test=test,
-                        fast=TRUE) 
-          x <- x$data$type1data
-          # data <- data.table::rbindlist(list(data,x))
-          #data <- rbind(data,x)
-          if(saveProgress==TRUE){
-            filename_i <- paste("~/DATA/censusprofiler/data/statfiles/stat_table_",sprintf("%02d",states[i]),".RDS",sep="")
-            # filename_d <- "~/DATA/censusprofiler/data/statfiles/stat_table_cumulative.RDS"
-            saveRDS(x,filename_i)
-            # saveRDS(data,filename_d)
-            #if(file.exists(filename_i) && file.exists(filename_d)){
-            if(file.exists(filename_i)){
-              message("Saved progress.")
-            }else{
-              stop("error saving progress.")
-            }
-          }else{
-            data <- rbind(data,x)
-          }
-          if(test==FALSE)setTxtProgressBar(pb, i)
-        }
-        if(test==FALSE)close(pb)
-        
-        if(summary_table==FALSE){
-          return(data)
-        }
-      }
-    }
-
-    ## Logics for returning a summary table of dataframe.
-    if(summary_table==TRUE){
-      if(is.null(data)){
-        stop("Dataframe requred to parse and summarize.")
-      }
-      vars <- variables
-      if(verbose==TRUE)message(paste("Calculating summary_table. This may take a while. Processing ",nrow(data)," rows, and ",length(vars)," variables.",sep=""))
-      st <- Sys.time()
-      z <- NULL
-      
-      for(i in 1:length(vars)){
-        if(verbose==TRUE)message(paste(dur(st),"Iteration ",i),sep="")
-        sti <- Sys.time()
-        if(verbose==TRUE)message(paste(dur(st),"Filtering data",sep=""))
-        #subdf = data %>% filter(variable==vars[i])
-        subdf <- data[data$variable==vars[i],]
-        if(verbose==TRUE)message(paste(dur(st),"Performing calculations...",sep=""))
-        
-        if(verbose==TRUE)message(paste(dur(st),"...calculating sd_pct",sep=""))
-        sd_pct <- sd(subdf$pct_by_type,na.rm=TRUE)
-        if(verbose==TRUE)message(paste(dur(st),"...calculating sd_est",sep=""))
-        sd_est <- sd(subdf$estimate,na.rm=TRUE)
-        if(verbose==TRUE)message(paste(dur(st),"...calculating mean_pct",sep=""))
-        mean_pct <- mean(subdf$pct_by_type,na.rm=TRUE)
-        if(verbose==TRUE)message(paste(dur(st),"...calculating mean_est",sep=""))
-        mean_est <- mean(subdf$estimate,na.rm=TRUE)
-        if(verbose==TRUE)message(paste(dur(st),"...calculating median_pct",sep=""))
-        median_pct <- median(subdf$pct_by_type,na.rm=TRUE)
-        if(verbose==TRUE)message(paste(dur(st),"...calculating median_est",sep=""))
-        median_est <- median(subdf$estimate,na.rm=TRUE)
-        if(verbose==TRUE)message(paste(dur(st),"...calculating max_pct",sep=""))
-        max_pct <- max(subdf$pct_by_type,na.rm=TRUE)
-        if(verbose==TRUE)message(paste(dur(st),"...calculating max_est",sep=""))
-        max_est <- max(subdf$estimate,na.rm=TRUE)
-        if(verbose==TRUE)message(paste(dur(st),"...calculating min_pct",sep=""))
-        min_pct <- min(subdf$pct_by_type,na.rm=TRUE)
-        if(verbose==TRUE)message(paste(dur(st),"...calculating min_est",sep=""))
-        min_est <- min(subdf$estimate,na.rm=TRUE)
-        
-        d <- data.frame(
-          variable = vars[i],
-          sd_pct = sd_pct,
-          sd_est = sd_est,
-          mean_pct = mean_pct,
-          mean_est = mean_est,
-          median_pct = median_pct,
-          median_est = median_est,
-          max_pct = max_pct,
-          max_est = max_est,
-          min_pct = min_pct,
-          min_est = min_est
-        )
-        if(verbose==TRUE)message(paste(dur(st),"Combining data",sep=""))
-        if(i==1){
-          df <- d
-        }else{
-          df <- rbind(df,d)
-        }
-        x <- round(difftime(Sys.time(),st,units = "sec"),2)
-        y <- round(difftime(Sys.time(),sti,units = "sec"),2)
-        z <- c(z,y)
-        zm <- mean(z)
-        zr <- ((length(vars)-i)*zm)/60
-        if(i>1){
-          if(verbose==TRUE)message(paste("Time elapsed: ",x," seconds | Iteration: ",y," seconds | Est. time remaining: ",zr," minutes."))
-        }
-      }
-      
-      return(df)
-      
-    }else{
-      stop("No parameters specified.")
-    }
-    #on.exit(rm(data,df))
-  }
-}
 # stat_helper-----------------------------------
 #' Utility: Stat Helper
 #' 
@@ -1486,25 +1512,25 @@ stat_helper <- function(data,
   }
   
   df <- data
-
+  
   if(verbose==TRUE)message(" -- stat_helper | loading variables/table_ids")
-
-   if(!is.null(tableID)){
-     if(verbose==TRUE)message(" -- stat_helper | checking tableID inputs")
-     TILIST <- CV.GROUPS$table_id
+  
+  if(!is.null(tableID)){
+    if(verbose==TRUE)message(" -- stat_helper | checking tableID inputs")
+    TILIST <- CV.GROUPS$table_id
     if(!(tableID %in% TILIST)){
       stop("Whoops, it appears that this table_id doesn't appear in variables.")
     }
-      if(verbose==TRUE)message(" -- stat_helper | filtering via tableID")
-      df <- df[df$table_id==tableID,]
-   }
+    if(verbose==TRUE)message(" -- stat_helper | filtering via tableID")
+    df <- df[df$table_id==tableID,]
+  }
   
   ## Filter by row type
   if(!is.null(typeFilter)){
     if(is.numeric(typeFilter)){
       tf <- c()
       for(b in 1:length(typeFilter)){
-        tfa <- case_when(
+        tfa <- dplyr::case_when(
           typeFilter[b] == 1 ~ "root",
           typeFilter[b] == 2 ~ "summary",
           typeFilter[b] == 3 ~ "level_1",
@@ -1519,20 +1545,20 @@ stat_helper <- function(data,
     }
     df <- df[df$type %in% typeFilter,]
   }
-
+  
   ## Filter if variable params.
   if(!is.null(variable)){
     if(verbose==TRUE)message(" -- stat_helper | filtering via variable")
     if(is.numeric(variable)){
       varfix <- c()
       for(a in 1:length(variable)){
-      varfix <- c(varfix,paste(tableID,"_",sprintf("%03d",variable[a]),sep=""))
+        varfix <- c(varfix,paste(tableID,"_",sprintf("%03d",variable[a]),sep=""))
       }
       variable <- varfix
     }
     df <- df[df$variable %in% variable,]
   }
-
+  
   ## Connect profile_all_summary_stats object to current filtered df.
   df <- left_join(ungroup(df),statTable,by="variable")
   # Mutate to add zScores.
@@ -1544,7 +1570,7 @@ stat_helper <- function(data,
   }else{
     df <- df %>% filter(zScore_est >= zThresh)
   }
-
+  
   if(nrow(df)>0){
     if(verbose==TRUE){
       note <- paste0("*Special Note*  \n",
@@ -1567,6 +1593,416 @@ stat_helper <- function(data,
   }
 }
 
+# stat_table_builder-----------------------------------
+
+#' Utility: Stat Table Builder
+#' 
+#' A utility function for generating a dataframe object of all census tracts in 
+#' the United States, with variables from a variable list, Additionally, can calculate
+#' distribution statistics.
+#'
+#' @param year Year value for variable selection.
+#' @param data A data object generated by "master_list" set to TRUE, to create summary_table.
+#' @param summary_table Set to `TRUE` to create basic distribution statistics. 
+#' @param master_list Set to `TRUE` to download census tracts with variable list provided. 
+#' @param compiler Set to `TRUE` to stitch downloaded master list files into a single master file.
+#' @param variables Variable list (vector) object to pass to ACS call.
+#' @param geography Options to get "block group","tract","county" or "state".
+#' @param test Testing variable. Uses a limited data call for internal testing.
+#' @param tableID profileList object to pass to ACS call.
+#' @param geosObject Optional geosObject to speed up processing time.
+#' @param saveProgress Logical parameter to save individual downloaded files to
+#'   /data/ folder to reduce runtime and memory load.
+#' @param stateStart Related to saveProgress, if the process is interrupted, a 
+#' state FIPS code to begin the process at. 
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
+#' @param verbose Logical parameter to specify whether to produce verbose output.   
+#'
+#' @importFrom stats sd
+#' @importFrom stats median
+#' @importFrom data.table rbindlist
+#'
+#' @return A dataframe.
+#'
+#' @examples
+#' \dontrun{
+#' # Run summary statistics.
+#' stat_table_builder(data=profile_all_summary_stats,
+#' summary_table=TRUE) 
+#' # Download all census tracts.
+#' stat_table_builder(master_list=TRUE) 
+#' }
+stat_table_builder <- function(year=NULL,
+                               data=NULL,
+                               summary_table=FALSE,
+                               master_list=FALSE,
+                               compiler=FALSE,
+                               tableID=NULL,
+                               variables=NULL,
+                               geography="tract",
+                               test=FALSE,
+                               geosObject=NULL,
+                               saveProgress=FALSE,
+                               stateStart=NULL,
+                               dataset_main="acs",
+                               dataset_sub="acs5",
+                               dataset_last=NULL,
+                               censusVars=NULL,
+                               verbose=FALSE){
+  
+  ## Deal with "no visible binding for global variable" error 
+  GEOID <- STATEFP <- COUNTYFP <- NULL
+  
+  if(verbose==TRUE)message("Getting CV...")
+  if(is.null(censusVars)){ 
+    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
+  
+  if(compiler==TRUE){
+    relPath <- "data/statfiles/"
+    message("Setting file path...")
+    filepath <- relPath
+    message("Getting file list...")
+    filelist <- list.files(filepath)
+    datalist <- list()
+    message("Building file array...")
+    for(i in 1:length(filelist)){
+      message(paste(" > for",filelist[i]," [",round(i/length(filelist),2)*100,"%]..."))
+      name <- filelist[i]
+      dp <- list()
+      dp[[name]] <- readRDS(paste(filepath,filelist[i],sep=""))
+      datalist <- append(datalist,dp)
+    }
+    message("Binding data array into cumulative file...")
+    datafull <- data.table::rbindlist(datalist)
+    dffn <- paste(filepath,"stat_table_cumulative.RDS",sep="")
+    saveRDS(datafull,dffn)
+    if(exists(dffn))message("Saved cumulative data successfully.")
+  }else{
+    
+    ## Initial error checking
+    if(is.null(tableID)){
+      stop("You're going to need to supply a vector of tableIDs.")
+    }
+    
+    ## Since we're mainly interested in the summary df, we can do this in one shot, if summary_table==TRUE and data==NULL.
+    ## Otherwise, just download master_list, or rerun with master_list df and create summary table.
+    # Start by getting geos. 
+    
+    ##TODO clean this up to cohere with logic in geo_var_builder().
+    geo <- geo_var_builder(geography=geography,try="local",geosObject = geosObject)
+    
+    if(geography=="block group"){
+      #geos <- geo_var_builder(geography="block groups",try="local")
+      geo <- geo$geo_blocks
+    }else if(geography=="tract"){
+      #geos <- geo_var_builder(geography="tract",try="local")
+      geo <- geo$geo_tracts
+    }else if(geography=="county"){
+      #geos <- geo_var_builder(geography="county",try="local")
+      geo <- geo$geo_counties
+    }else if(geography=="state"){
+      #geos <- geo_var_builder(geography="state",try="local")
+      geo <- geo$geo_states
+    }else{
+      stop("Error: geography not specified")
+    }
+    
+    ## Get a list of states.
+    if(exists("geos",envir = .GlobalEnv)){
+      geos <- geos
+    }else{
+      geos <- geo_var_builder(geography="state",try="local")  
+    }
+    states <- geos$geo_states
+    states <- states %>% filter(GEOID<=56)
+    if(!is.null(stateStart))states <- states %>% filter(GEOID>=stateStart)
+    states <- as.vector(as.numeric(states$GEOID))
+    states <- sort(states)
+    ## Set params for testing suite. 
+    # if(test==TRUE){
+    #   states <- 17
+    #   county <- 043
+    #   if("STATEFP" %in% names(geo)){
+    #     geo <- geo %>% filter(STATEFP==states)
+    #   }
+    #   if("COUNTYFP" %in% names(geo)){
+    #     geo <- geo %>% filter(COUNTYFP==county)
+    #   }
+    # }else{
+    county <- NULL
+    # }
+    
+    if(master_list==TRUE & is.null(data)){
+      # Skip messaging if test is true
+      if(test==FALSE){
+        sizeRows <- nrow(geo)*length(variables)
+        sizeFile <- round((sizeRows*121)/10^9,3)
+        
+        if(summary_table==TRUE & is.null(data)){
+          user_input <- readline(stringr::str_wrap(paste("HEADS UP: This will generate a large dataframe (",format(sizeRows,big.mark=","),"rows; approx.",sizeFile,"GB). In addition, `summary_table=TRUE`, this will return ONLY the summary table.  For `master_list`, rerun with `master_list` set to TRUE. Proceed? (y/n)"),width=90))
+        }else{
+          user_input <- readline(
+            
+            stringr::str_wrap(paste("HEADS UP: This will generate a large dataframe (",format(sizeRows,big.mark=","),"rows; approx.",sizeFile,"GB). In addition, `summary_table=TRUE`, this will return ONLY the summary table.  For `master_list`, rerun with `master_list` set to TRUE. Proceed? (y/n)"),width=90))
+        }
+      }else{
+        user_input <- "y"
+      }
+      if(user_input!="y"){
+        stop("OK, quitting.")
+      }else{
+        ## Loop through profiler() requests by state and append to df.
+        data <- NULL
+        if(test==FALSE){
+          pb <- txtProgressBar(min = 1, max = length(states), style = 3)
+        }
+        for(i in 1:length(states)){
+          if(verbose==TRUE)message(paste("Iteration ",i,"/",length(states)," (",round(i/length(states),1)*100,"%)",sep=""))
+          x <- profiler(tableID = tableID,
+                        variables = variables,
+                        year=2022,
+                        state=states[i],
+                        county=county,
+                        geography=geography,
+                        verbose = verbose,
+                        censusVars = CV,
+                        test=test,
+                        fast=TRUE) 
+          x <- x$data$type1data
+          # data <- data.table::rbindlist(list(data,x))
+          #data <- rbind(data,x)
+          if(saveProgress==TRUE){
+            filename_i <- paste("~/DATA/censusprofiler/data/statfiles/stat_table_",sprintf("%02d",states[i]),".RDS",sep="")
+            # filename_d <- "~/DATA/censusprofiler/data/statfiles/stat_table_cumulative.RDS"
+            saveRDS(x,filename_i)
+            # saveRDS(data,filename_d)
+            #if(file.exists(filename_i) && file.exists(filename_d)){
+            if(file.exists(filename_i)){
+              message("Saved progress.")
+            }else{
+              stop("error saving progress.")
+            }
+          }else{
+            data <- rbind(data,x)
+          }
+          if(test==FALSE)setTxtProgressBar(pb, i)
+        }
+        if(test==FALSE)close(pb)
+        
+        if(summary_table==FALSE){
+          return(data)
+        }
+      }
+    }
+    
+    ## Logics for returning a summary table of dataframe.
+    if(summary_table==TRUE){
+      if(is.null(data)){
+        stop("Dataframe requred to parse and summarize.")
+      }
+      vars <- variables
+      if(verbose==TRUE)message(paste("Calculating summary_table. This may take a while. Processing ",nrow(data)," rows, and ",length(vars)," variables.",sep=""))
+      st <- Sys.time()
+      z <- NULL
+      
+      for(i in 1:length(vars)){
+        if(verbose==TRUE)message(paste(dur(st),"Iteration ",i),sep="")
+        sti <- Sys.time()
+        if(verbose==TRUE)message(paste(dur(st),"Filtering data",sep=""))
+        #subdf = data %>% filter(variable==vars[i])
+        subdf <- data[data$variable==vars[i],]
+        if(verbose==TRUE)message(paste(dur(st),"Performing calculations...",sep=""))
+        
+        if(verbose==TRUE)message(paste(dur(st),"...calculating sd_pct",sep=""))
+        sd_pct <- sd(subdf$pct_by_type,na.rm=TRUE)
+        if(verbose==TRUE)message(paste(dur(st),"...calculating sd_est",sep=""))
+        sd_est <- sd(subdf$estimate,na.rm=TRUE)
+        if(verbose==TRUE)message(paste(dur(st),"...calculating mean_pct",sep=""))
+        mean_pct <- mean(subdf$pct_by_type,na.rm=TRUE)
+        if(verbose==TRUE)message(paste(dur(st),"...calculating mean_est",sep=""))
+        mean_est <- mean(subdf$estimate,na.rm=TRUE)
+        if(verbose==TRUE)message(paste(dur(st),"...calculating median_pct",sep=""))
+        median_pct <- median(subdf$pct_by_type,na.rm=TRUE)
+        if(verbose==TRUE)message(paste(dur(st),"...calculating median_est",sep=""))
+        median_est <- median(subdf$estimate,na.rm=TRUE)
+        if(verbose==TRUE)message(paste(dur(st),"...calculating max_pct",sep=""))
+        max_pct <- max(subdf$pct_by_type,na.rm=TRUE)
+        if(verbose==TRUE)message(paste(dur(st),"...calculating max_est",sep=""))
+        max_est <- max(subdf$estimate,na.rm=TRUE)
+        if(verbose==TRUE)message(paste(dur(st),"...calculating min_pct",sep=""))
+        min_pct <- min(subdf$pct_by_type,na.rm=TRUE)
+        if(verbose==TRUE)message(paste(dur(st),"...calculating min_est",sep=""))
+        min_est <- min(subdf$estimate,na.rm=TRUE)
+        
+        d <- data.frame(
+          variable = vars[i],
+          sd_pct = sd_pct,
+          sd_est = sd_est,
+          mean_pct = mean_pct,
+          mean_est = mean_est,
+          median_pct = median_pct,
+          median_est = median_est,
+          max_pct = max_pct,
+          max_est = max_est,
+          min_pct = min_pct,
+          min_est = min_est
+        )
+        if(verbose==TRUE)message(paste(dur(st),"Combining data",sep=""))
+        if(i==1){
+          df <- d
+        }else{
+          df <- rbind(df,d)
+        }
+        x <- round(difftime(Sys.time(),st,units = "sec"),2)
+        y <- round(difftime(Sys.time(),sti,units = "sec"),2)
+        z <- c(z,y)
+        zm <- mean(z)
+        zr <- ((length(vars)-i)*zm)/60
+        if(i>1){
+          if(verbose==TRUE)message(paste("Time elapsed: ",x," seconds | Iteration: ",y," seconds | Est. time remaining: ",zr," minutes."))
+        }
+      }
+      
+      return(df)
+      
+    }else{
+      stop("No parameters specified.")
+    }
+    #on.exit(rm(data,df))
+  }
+}
+
+# summarize_data-------------------------
+summarize_data <- function(data=NULL,
+                           geography=NULL,
+                           filterRadius=NULL,
+                           state=NULL,
+                           county=NULL,
+                           tract=NULL,
+                           block_group=NULL){
+  
+  table_id <- year <- variable <- concept <- calculation <- 
+    type <- varID <- estimate <- subtotals <- NULL
+  
+  if(is.null(data) || is.null(geography)){
+    stop("There are missing arguments in summarize_data().")
+  }
+  ## This is `type 3 data`
+  data <- data %>% dplyr::group_by(table_id,year,variable,concept,labels,calculation,type,varID) %>% 
+    dplyr::summarize(estimate=sum(estimate))
+  data <- data %>% dplyr::group_by(table_id,type) %>% 
+    dplyr::mutate(subtotals=sum(estimate))
+  data <- data %>% dplyr::mutate(pct = estimate/subtotals)
+  return(data)
+  # stop()
+  # # Add geographical details.
+  # if(geography=="state"){
+  #   data <- data %>% mutate(state=unique(state))
+  # }else if(geography=="county"){
+  #   data <- data %>% mutate(state=unique(state))
+  #   data <- data %>% mutate(county=unique(county))
+  # }else if(geography=="tract"){
+  #   data <- data %>% mutate(state=unique(state))
+  #   data <- data %>% mutate(county=unique(county))
+  #   data <- data %>% mutate(tract=unique(tract))
+  #   print(data$county)
+  #   stop()
+  # }else if(geography=="block group"){
+  #   data <- data %>% mutate(state=unique(state))
+  #   data <- data %>% mutate(county=unique(county))
+  #   data <- data %>% mutate(tract=unique(tract))
+  #   data <- data %>% mutate(block_group = unique(block_group))
+  #   #TODO ^ this needs to get cleaned up. It's tricky because block groups 
+  #   # are single numeric values (1,2,3), as opposed to tracts, which are 
+  #   # lengthier and vary across geographies. Need to better identify block 
+  #   # groups.
+  # }else{
+  # }
+  # data <- data %>% mutate(geography = geography)
+  # if(!is.null(filterRadius))data <- data %>% mutate(radius=filterRadius)
+  # return(data)
+}
+
+# tableID_pre_check--------------------------------------
+# Table Profile selection
+tableID_pre_check <- function(x=NULL,
+                              cvMatch=FALSE,
+                              censusVars=NULL){
+  if(cvMatch==FALSE){
+    if(is.null(x)){
+      z <- c("NO_TABLE_ID","CHECK")
+    }else{
+      z <- list()
+      for(i in 1:length(x)){
+        num <- as.character(c(0:9))
+        zi <- dplyr::case_when(
+          stringr::str_starts(x[i],"B") & 
+            stringr::str_sub(x[i],2,2) %in% num ~ c("B",""),           # Detailed Tables: Base Table
+          stringr::str_starts(x[i],"CP") & 
+            stringr::str_sub(x[i],3,3) %in% num~ c("CP","cprofile"), # Comparison Profile
+          stringr::str_starts(x[i],"C") &
+            stringr::str_sub(x[i],2,2) %in% num ~ c("C",""),           # Detailed Tables: Collapsed Table
+          stringr::str_starts(x[i],"S") & 
+            stringr::str_sub(x[i],2,2) %in% num ~ c("S","subject"),    # Subject Table
+          stringr::str_starts(x[i],"DP") & 
+            stringr::str_sub(x[i],3,3) %in% num~ c("DP","profile"),  # Data Profile
+          stringr::str_starts(x[i],"S0201") &
+            stringr::str_sub(x[i],6,6) %in% num ~ c("S0201","spp"),# Selected Population Profile
+          #stringr::str_starts(x,"R") ~ "",    # Ranking Table (TODO this and below exist, but can't find them rn)
+          #stringr::str_starts(x,"GCT") ~ "",  # Geographic Comparison Table
+          #stringr::str_starts(x,"K20") ~ "",  # Supplemental Table
+          #stringr::str_starts(x,"XK") ~ "",   # Experimental Estimates
+          #stringr::str_starts(x,"NP") ~ "",   # Narrative Profile
+          .default = c("NOTFOUND","ERROR")
+        )
+        z <- append(z,zi)
+      }
+    }
+    return(z)
+  }else{
+    return(match(x,censusVars[[1]]$table_id))
+  }
+}
+
+# theme_censusprofiler --------------
+theme_censusprofiler <- function(x,...){
+  if (!inherits(x, "flextable")) {
+    stop(sprintf("Function `%s` supports only flextable objects.", 
+                 "theme_vanilla()"))
+  }
+  thick_b <- fp_border(width = 2, 
+                       color = "#111111")
+  std_b <- fp_border(width = 1,
+                     color = "#111111")
+  thin_b <- fp_border(width = .5,
+                      color = "#111111")
+  x <- border_remove(x)
+  x <- font(x, fontname = "Open Sans", part = "all")
+  x <- fontsize(x, size = 9.5, part = "all")
+  x <- color(x, color = "#EEEEEE", part="header")
+  x <- bg(x , bg="#002242",part="header")
+  x <- hline(x, border = fp_border(width=.5,color="#222222"), part = "all")
+  x <- border_outer(x, border=thin_b, part="header")
+  x <- border_inner_h(x, border=thin_b,)
+  #x <- hline_top(x, border = thick_b, part = "header")
+  x <- hline_bottom(x, border = std_b, part = "header")
+  x <- hline_bottom(x, border = std_b, part = "body")
+  x <- bold(x = x, bold = TRUE, part = "header")
+  x <- padding(x, padding = 7, part="all")
+  x <- align_text_col(x, align = "left", header = TRUE)
+  x <- align_nottext_col(x, align = "right", header = TRUE)
+  x <- autofit(x)
+  fix_border_issues(x)
+}
+
 # type_data ---------------------------------------------------------------
 
 # type_data
@@ -1586,36 +2022,36 @@ type_data <- function(dataset,
   ## Check to see if we have a full profile object.
   if(all(class(dataset)=="list")==TRUE){
     if(all(names(dataset)==c("info","data"))==TRUE &&
-     all(names(dataset$data)==c("type1data",
-                                "type2data",
-                                "type3data",
-                                "type4data"))==TRUE){
-    check <- 5
-    df <- dataset 
-    ## Check to see if we have a direct profile object (no info)
+       all(names(dataset$data)==c("type1data",
+                                  "type2data",
+                                  "type3data",
+                                  "type4data"))==TRUE){
+      check <- 5
+      df <- dataset 
+      ## Check to see if we have a direct profile object (no info)
     }else if(all(names(dataset$data)==c("type1data",
                                         "type2data",
                                         "type3data",
                                         "type4data"))==TRUE){
-     check <- 6
-     df <- dataset                                     
+      check <- 6
+      df <- dataset                                     
     }else{
       stop("!> Unknown format. Requires a censusprofiler object. Create one using profiler().")
     }
     ## If not profile, check to see if this is a single valid censusprofiler data object.
   }else if(length(class(dataset))==3){
     if(all(class(dataset)==c("tbl_df",
-                          "tbl",
-                          "data.frame"))==TRUE && 
-      all(c("table_id",
-            "varID",
-            "dt") %in% names(dataset))){
-              check <- unique(dataset$dt)
-              if(length(check)>1)stop("!> Error in data check. Multiple values in dt column.")
-              df <- dataset 
-            }else{  
-              stop("!> Unknown datatype. Requires a well-formed censusprofiler object. Create one using profiler().")
-            }
+                             "tbl",
+                             "data.frame"))==TRUE && 
+       all(c("table_id",
+             "varID",
+             "dt") %in% names(dataset))){
+      check <- unique(dataset$dt)
+      if(length(check)>1)stop("!> Error in data check. Multiple values in dt column.")
+      df <- dataset 
+    }else{  
+      stop("!> Unknown datatype. Requires a well-formed censusprofiler object. Create one using profiler().")
+    }
   }else if(length(class(dataset))==4){
     if(all(class(dataset)==c("grouped_df",
                              "tbl_df",
@@ -1633,7 +2069,7 @@ type_data <- function(dataset,
   }else{
     stop("!> Unknown format / data. Requires a well-formed censusprofiler object. Create one using profiler().")
   }
-   
+  
   if(return==TRUE){
     return(df)
   }else{
@@ -1804,111 +2240,6 @@ variable_builder <- function(tableID=NULL,
   return(x)
 }
 
-# dur--------------------------------------
-dur <- function(st){
-  x <- paste(format(round(difftime(Sys.time(),st,units = "sec"),4),scientific=FALSE)," | ")
-  return(x)
-}
-
-# tableID_pre_check--------------------------------------
-# Table Profile selection
-tableID_pre_check <- function(x=NULL,
-                              cvMatch=FALSE,
-                              censusVars=NULL){
-  if(cvMatch==FALSE){
-    if(is.null(x)){
-      z <- c("NO_TABLE_ID","CHECK")
-    }else{
-      z <- list()
-      for(i in 1:length(x)){
-        num <- as.character(c(0:9))
-        zi <- case_when(
-          stringr::str_starts(x[i],"B") & 
-            stringr::str_sub(x[i],2,2) %in% num ~ c("B",""),           # Detailed Tables: Base Table
-          stringr::str_starts(x[i],"CP") & 
-            stringr::str_sub(x[i],3,3) %in% num~ c("CP","cprofile"), # Comparison Profile
-          stringr::str_starts(x[i],"C") &
-            stringr::str_sub(x[i],2,2) %in% num ~ c("C",""),           # Detailed Tables: Collapsed Table
-          stringr::str_starts(x[i],"S") & 
-            stringr::str_sub(x[i],2,2) %in% num ~ c("S","subject"),    # Subject Table
-          stringr::str_starts(x[i],"DP") & 
-            stringr::str_sub(x[i],3,3) %in% num~ c("DP","profile"),  # Data Profile
-          stringr::str_starts(x[i],"S0201") &
-            stringr::str_sub(x[i],6,6) %in% num ~ c("S0201","spp"),# Selected Population Profile
-          #stringr::str_starts(x,"R") ~ "",    # Ranking Table (TODO this and below exist, but can't find them rn)
-          #stringr::str_starts(x,"GCT") ~ "",  # Geographic Comparison Table
-          #stringr::str_starts(x,"K20") ~ "",  # Supplemental Table
-          #stringr::str_starts(x,"XK") ~ "",   # Experimental Estimates
-          #stringr::str_starts(x,"NP") ~ "",   # Narrative Profile
-          .default = c("NOTFOUND","ERROR")
-        )
-        z <- append(z,zi)
-      }
-    }
-    return(z)
-  }else{
-    return(match(x,censusVars[[1]]$table_id))
-  }
-}
-
-# variable_pre_check--------------------------------------
-# Variable construction checks
-variable_pre_check <- function(var=NULL,tipc=NULL){
-  if(is.null(tipc))stop("You must include a tipc argument in variable_pre_check().")
-  ## tipc must be a tableID_pre_check object
-  if(tipc[1]=="NO_TABLE_ID"){
-    t <- tableID_pre_check(var)
-    u <- grepl("_",var)
-    if(t[1]=="NOTFOUND" || u==FALSE){
-      stop(paste("!> `",var,"` is malformed. Check variable and try again.",sep=""))
-    }
-  }
-  if(tipc[1]=="NOTFOUND"){ # Did we misspecify tableID in variable?
-    stop(paste("!> It looks like `",var,"` is a malformed variable. Check for typos.",sep=""))
-  # }else if(tipc[1]!=pseudo_tableID(var)){ # Did we mismatch variable / tableID?
-  #   stop("!> It looks like you have a tableID / variable mismatch.")
-  }else if(grepl("_",var)==FALSE){
-    stop(paste("!> Wrong format for `",var,"`. Variables are either simple numeric c(1,2,3) / c(001,002,003) or in format of `B01001_001`.",sep=""))
-  }else{
-  return(1)
-  }
-}
-
-# pseudo_tableID--------------------------------------
-pseudo_tableID <- function(vars,
-                           fast=FALSE,
-                           test=FALSE,
-                           verbose=FALSE){
-  tid <- NULL
-  if(test==FALSE && verbose==TRUE && length(vars)>1)pb <- txtProgressBar(min = 1, max = length(vars), style = 3)
-  if(fast==FALSE){
-    for(v in 1:length(vars)){
-      if(str_detect(vars[v],"_")==FALSE || is.numeric(vars[v])){
-        ##TODO I'd like to make an autocorrect for this so we can just include numeric values.
-        stop("!> Insufficient data from variables to detect table_id. Please format variables in tableID+num_var format (i.e. `B01001_001`.")
-      }
-      tids <- stringr::str_split(vars[v],"_")
-      tids <- unlist(tids)[1]
-      tid <- c(tid,tids)
-      if(test==FALSE && verbose==TRUE && length(vars)>1)setTxtProgressBar(pb, v)
-    }
-  }else{
-    tid <- vapply(strsplit(vars,"_",fixed=TRUE),`[`,1,FUN.VALUE=character(1))
-  }
-  if(test==FALSE && verbose==TRUE && length(vars)>1)close(pb)
-  # Check for errors
-  # utid <- unique(tid)
-  # for(t in 1:length(utid)){
-  #   print(utid)
-  #   tidt <- tableID_pre_check(utid[t])
-  #   if(tidt[1]=="NOTFOUND"){
-  #     ##ADDTEST
-  #     stop("!> Malformed or unavailable table ID. Please correct.")
-  #   }
-  # }
-  return(tid)
-}
-
 # variable_formatter--------------------------------------
 variable_formatter <- function(var=NULL,
                                tipc=NULL,
@@ -1939,6 +2270,88 @@ variable_formatter <- function(var=NULL,
   return(x)
 }
 
+# variable_pre_check--------------------------------------
+# Variable construction checks
+variable_pre_check <- function(var=NULL,tipc=NULL){
+  if(is.null(tipc))stop("You must include a tipc argument in variable_pre_check().")
+  ## tipc must be a tableID_pre_check object
+  if(tipc[1]=="NO_TABLE_ID"){
+    t <- tableID_pre_check(var)
+    u <- grepl("_",var)
+    if(t[1]=="NOTFOUND" || u==FALSE){
+      stop(paste("!> `",var,"` is malformed. Check variable and try again.",sep=""))
+    }
+  }
+  if(tipc[1]=="NOTFOUND"){ # Did we misspecify tableID in variable?
+    stop(paste("!> It looks like `",var,"` is a malformed variable. Check for typos.",sep=""))
+    # }else if(tipc[1]!=pseudo_tableID(var)){ # Did we mismatch variable / tableID?
+    #   stop("!> It looks like you have a tableID / variable mismatch.")
+  }else if(grepl("_",var)==FALSE){
+    stop(paste("!> Wrong format for `",var,"`. Variables are either simple numeric c(1,2,3) / c(001,002,003) or in format of `B01001_001`.",sep=""))
+  }else{
+    return(1)
+  }
+}
+
+
+# varInputCheck---------------------
+varInputCheck <- function(tableID = NULL,
+                          variables = NULL,
+                          variableSummary = NULL,
+                          verbose=FALSE){
+  if(is.list(variables)){
+    if(is.null(names(variables))){
+      stop("Incorrect formatting. Variables must be formatted in a named list. E.g.: list(`B01001`=c(1:8)).")
+    }
+    tableID <- names(variables)
+  }
+  
+  newVars <- newVarsSum <- NULL 
+  if(is.null(tableID)){
+    if(is.null(variables)){
+      stop("Insufficient data: requires tableID and/or variables.")
+    }else if (is.numeric(variables)){
+      stop("Ambiguous variables supplied. Either provide whole variable names (`B01001_001`) or include a tableID.")
+    }
+  }else{
+    if(is.list(variables)){
+      for(t in 1:length(tableID)){
+        for(i in 1:length(variables[[t]])){
+          if(is.numeric(variables[[t]][i])==TRUE){
+            newVars <- c(newVars,paste(tableID[t],"_",sprintf("%03d",variables[[t]][i]),sep=""))
+          }
+        }
+      }
+    }else{
+      for(i in 1:length(variables)){
+        if(is.numeric(variables[i])==TRUE){
+          newVars <- c(newVars,paste(tableID,"_",sprintf("%03d",variables[i]),sep=""))
+        }
+      }
+    }
+  }
+  
+  if(is.null(tableID) && is.null(variableSummary)){ 
+    stop("Summary variable must be supplied. Or include tableID.")
+  }else{
+    for(v in 1:length(tableID)){   
+      if(is.null(variableSummary[v])){
+        newVarsSum <- c(newVarsSum,paste(tableID[v],"_",sprintf("%03d",1),sep=""))
+        if(verbose==TRUE)message(paste("No variableSummary supplied. Defaulting to ",tableID[v],"_",sprintf("%03d",1),sep=""))
+      }else{
+        if(is.numeric(variableSummary[v])){
+          newVarsSum <- c(newVarsSum,paste(tableID[v],"_",sprintf("%03d",variableSummary[v]),sep=""))
+        }
+      }
+    }
+  }
+  if(!is.null(newVars))variables <- newVars
+  if(!is.null(newVarsSum))variableSummary <- newVarsSum
+  return(list(tableID = tableID, variables = variables, variableSummary = variableSummary))
+}
+
+# Defunct Functions -------------
+
 # # checkSave-------------------------
 # checkSave <- function(x=NULL,
 #                       test=FALSE){ ## Do I already have a version of this variable?
@@ -1958,6 +2371,7 @@ variable_formatter <- function(var=NULL,
 #   }
 # }
 # 
+
 # # saveMe------------------
 # saveMe <- function(x=NULL,
 #                    test=FALSE){
@@ -1972,431 +2386,3 @@ variable_formatter <- function(var=NULL,
 #   #stop('Exiting since you did not press y')
 # }
 
-# summarize_data-------------------------
-summarize_data <- function(data=NULL,
-                           geography=NULL,
-                           filterRadius=NULL,
-                           state=NULL,
-                           county=NULL,
-                           tract=NULL,
-                           block_group=NULL){
-  
-  table_id <- year <- variable <- concept <- calculation <- 
-    type <- varID <- estimate <- subtotals <- NULL
-  
-  if(is.null(data) || is.null(geography)){
-    stop("There are missing arguments in summarize_data().")
-  }
-  ## This is `type 3 data`
-  data <- data %>% group_by(table_id,year,variable,concept,labels,calculation,type,varID) %>% summarize(estimate=sum(estimate))
-  data <- data %>% group_by(table_id,type) %>% mutate(subtotals=sum(estimate))
-  data <- data %>% mutate(pct = estimate/subtotals)
-return(data)
-  # stop()
-  # # Add geographical details.
-  # if(geography=="state"){
-  #   data <- data %>% mutate(state=unique(state))
-  # }else if(geography=="county"){
-  #   data <- data %>% mutate(state=unique(state))
-  #   data <- data %>% mutate(county=unique(county))
-  # }else if(geography=="tract"){
-  #   data <- data %>% mutate(state=unique(state))
-  #   data <- data %>% mutate(county=unique(county))
-  #   data <- data %>% mutate(tract=unique(tract))
-  #   print(data$county)
-  #   stop()
-  # }else if(geography=="block group"){
-  #   data <- data %>% mutate(state=unique(state))
-  #   data <- data %>% mutate(county=unique(county))
-  #   data <- data %>% mutate(tract=unique(tract))
-  #   data <- data %>% mutate(block_group = unique(block_group))
-  #   #TODO ^ this needs to get cleaned up. It's tricky because block groups 
-  #   # are single numeric values (1,2,3), as opposed to tracts, which are 
-  #   # lengthier and vary across geographies. Need to better identify block 
-  #   # groups.
-  # }else{
-  # }
-  # data <- data %>% mutate(geography = geography)
-  # if(!is.null(filterRadius))data <- data %>% mutate(radius=filterRadius)
-  # return(data)
-}
-
-# set_api_key----------------------
-#' Set API Key
-#' 
-#' Sets the API key for the US Census API (see
-#' https://api.census.gov/data/key_signup.html) into the global environment for
-#' reuse with censusprofiler.
-#'
-#' @param key The API key obtained for use with US Census Data API.
-#' @param test Internal, for testing purposes.
-#'
-#' @return A global environmental variable.
-#' @export
-#'
-#' @examples
-#' \dontrun{
-#' set_api_key(APIKEYGOESHERE)
-#' }
-#' 
-set_api_key <- function(key=NULL,
-                        test=FALSE){
-  if(is.null(key)){
-    stop("No key provided. Try again.")
-  }
-  ## Check for existing key
-  if(test==FALSE){
-    if(("CENSUS_API_KEY" %in% names(Sys.getenv()))==TRUE){
-      message("API key already exists. Do you really want to override it? y/n")
-      user_input <- readline()
-      if(!(user_input %in% c("y","yes"))){
-        stop("OK, we won't update it.")
-      }else{
-        message("OK, updating.")
-        Sys.setenv("CENSUS_API_KEY" = key)
-      }
-    }else{
-      Sys.setenv("CENSUS_API_KEY" = key)
-    }
-  }else{ 
-      Sys.setenv("TEST_CENSUS_API_KEY" = key)
-    }
-  }
-
-# theme_censusprofiler --------------
-theme_censusprofiler <- function(x,...){
-  if (!inherits(x, "flextable")) {
-    stop(sprintf("Function `%s` supports only flextable objects.", 
-                 "theme_vanilla()"))
-  }
-  thick_b <- fp_border(width = 2, 
-                       color = "#111111")
-  std_b <- fp_border(width = 1,
-                     color = "#111111")
-  thin_b <- fp_border(width = .5,
-                      color = "#111111")
-  x <- border_remove(x)
-  x <- font(x, fontname = "Open Sans", part = "all")
-  x <- fontsize(x, size = 9.5, part = "all")
-  x <- color(x, color = "#EEEEEE", part="header")
-  x <- bg(x , bg="#002242",part="header")
-  x <- hline(x, border = fp_border(width=.5,color="#222222"), part = "all")
-  x <- border_outer(x, border=thin_b, part="header")
-  x <- border_inner_h(x, border=thin_b,)
-  #x <- hline_top(x, border = thick_b, part = "header")
-  x <- hline_bottom(x, border = std_b, part = "header")
-  x <- hline_bottom(x, border = std_b, part = "body")
-  x <- bold(x = x, bold = TRUE, part = "header")
-  x <- padding(x, padding = 7, part="all")
-  x <- align_text_col(x, align = "left", header = TRUE)
-  x <- align_nottext_col(x, align = "right", header = TRUE)
-  x <- autofit(x)
-  fix_border_issues(x)
-}
-
-# load_data---------------------------
-#' Load Data
-#' 
-#' A convenience function that loads functional data, including ACS variables, 
-#' a geos object, stats object, and/or geo profile comparison object. These are 
-#' created and then if selected, loaded into the global environment. 
-#'
-#' @param load_censusVars Logical param to capture census variables and concepts.
-#' @param load_geos Logical param to capture geos object.
-#' @param load_stats Logical param to create stats_object.
-#' @param load_profile_compare Logical param to create geo profile comparison object.
-#' @param geography Default geography option for stat_table_builder.
-#' @param geo_data Default geography options for load_geos.
-#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
-#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
-#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
-#' @param censusVars Passthrough object to bypass get_census_variables 
-#' @param loadToGlobal Logical param to save to global environment.
-#' @param year Default year for data calls.
-#' @param tableID ProfileList object for stat_table_builder.
-#' @param variables Variable list for stat_table_builder.
-#' @param verbose Logical param to provide feedback.
-#' @param geosObject Optional geosObject to speed up processing time.
-#' @param test Internal logical parameter to specify testing envir.
-#'
-#' @return data.frame objects loaded into global environment.
-#' 
-#' @export 
-#'
-#' @examples
-#' \dontrun{
-#' load_data(load_censusVars=TRUE, load_geos=TRUE,load_stats=TRUE,
-#' variables=profile_variables,tableID=profile_tableID)
-#' }
-load_data <- function(load_censusVars = FALSE,
-                      load_geos = FALSE,
-                      load_stats = FALSE,
-                      load_profile_compare = FALSE,
-                      geography = "tract",
-                      geo_data = c("state","county","tract"),
-                      dataset_main="acs",
-                      dataset_sub="acs5",
-                      dataset_last=NULL,
-                      censusVars=NULL,
-                      loadToGlobal = FALSE,
-                      year = 2021,
-                      tableID = NULL,
-                      variables = NULL,
-                      geosObject=NULL,
-                      test=FALSE,
-                      verbose=FALSE){
-  
-  ## Set all promised variables to NULL
-  CV <- CV.VARS <- CV.GROUPS <- NULL
-  
-  if(load_censusVars==TRUE){
-    if(verbose==TRUE)message("Getting CV...")
-    if(is.null(censusVars)){ 
-      CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
-    }else{
-      CV <- censusVars
-    }
-    
-    if(loadToGlobal==TRUE){
-      CV <<- CV
-    }
-  }
-  if(load_geos==TRUE){
-    y <- geo_var_builder(geography=geo_data,try="local",verbose=verbose)
-    if(loadToGlobal==TRUE){
-      geos <<- y
-    }else{
-      geos <- y
-    }
-  }
-  if(load_stats==TRUE){
-    ifelse(test==TRUE,ss <- 55,NULL)
-    z <- stat_table_builder(year=year,
-                            data = NULL,
-                            master_list = TRUE,
-                            summary_table = TRUE,
-                            tableID = tableID,
-                            variables = variables,
-                            geography = "tract",
-                            geosObject = geosObject,
-                            stateStart = ss,
-                            test=TRUE,
-                            verbose=verbose
-    )
-    
-    if(loadToGlobal==TRUE){
-      profile_stats <<- z
-    }else{
-      profile_stats <- z
-    }
-  }
-  
-  if(load_profile_compare==TRUE){
-    s <- create_comparison_data(geography="state",
-                                profileDataset = NULL,
-                                year=2021,
-                                variables = variables,
-                                tableID = tableID, 
-                                geosObject = geosObject,
-                                test=TRUE,
-                                verbose = verbose)
-    
-    u <- create_comparison_data(geography="us",
-                                profileDataset = NULL,
-                                year=2021,
-                                variables = variables,
-                                tableID = tableID, 
-                                geosObject = geosObject,
-                                test=TRUE,
-                                verbose = verbose)
-    
-    
-    if(loadToGlobal==TRUE){
-      stateCompare <<- s
-      usCompare <<- u
-    }else{
-      stateCompare <- s
-      usCompare <- u
-    }
-  }
-  
-  if(loadToGlobal==FALSE){
-    dt <- list()
-    if(load_censusVars==TRUE)dt <- append(dt,list(CV=CV))
-    if(load_geos==TRUE)dt <- append(dt,list(geos=geos))
-    if(load_stats==TRUE)dt <- append(dt,list(stats=profile_stats))
-    if(load_profile_compare)dt <- append(dt,list(stateCompare=stateCompare,usCompare=usCompare))
-    return(dt)
-    on.exit(
-      if(load_censusVars==TRUE)rm(CV),
-      if(load_geos==TRUE)rm(geos),
-      if(load_stats==TRUE)rm(profile_stats))
-    if(load_profile_compare==TRUE)rm(stateCompare,usCompare)
-  }
-  
-} 
-
-# profile_helper-------------------------
-
-#' Profile Helper
-#'
-#' A function designed to interactively create a vectorized list of selected
-#' variables to use for profiler() functionality. 
-#'
-#' @param year Year of call.
-#' @param tableID Vector with variables for inclusion.
-#' should be accessed.
-#' @param allCols Parameter to display all columns during review of variables 
-#' for selection.
-#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
-#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
-#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
-#' @param censusVars Passthrough object to bypass get_census_variables 
-#' @param test Internal: logical parameter to specificy testing environment.
-#' @param verbose Logical parameter to specify verbose output.
-#'
-#' @return Vector with variable values stored.
-#' @export
-#'
-#' @examples
-#' \dontrun{
-#' profile_builder(tableID=tableID,addNumbering=TRUE)
-#' }
-profile_helper <- function(tableID=NULL,
-                           year=NULL,
-                           allCols=FALSE,
-                           dataset_main="acs",
-                           dataset_sub="acs5",
-                           dataset_last=NULL,
-                           censusVars=NULL,
-                           test=FALSE,
-                           verbose=FALSE){
-  
-  ## Deal with "no visible binding for global variable" error 
-  censusDataset <- table_id <- name <- label <- 
-    type <- NULL
-  
-  if(is.null(year)){
-    stop("You need to include a year.")
-  }
-  
-  if(verbose==TRUE)message("Getting CV...")
-  if(is.null(censusVars)){ 
-    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
-  }else{
-    CV <- censusVars
-  }
-  CV.VARS <- CV[[1]]
-  CV.GROUPS <- CV[[2]]
-  
-  # if(addNumbering==TRUE){
-  # if(exists("profile_variables")){
-  #   message("It looks like you already have a profile_variables object created. \n Should we build on this? (yes) \n If (no), we'll start over. ")
-  #   ifelse(test==FALSE,
-  #          user_input <- readline(),
-  #          user_input <- "no")
-  #   if(user_input=="yes"){
-  #     profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
-  #     vbpv <- unique(as.vector(unlist(CV.VARS %>% filter(name %in% profile_variables) %>% select(table_id))))
-  #     profileVarsDF <- profileVarsDF %>% filter(!(table_id %in% vbpv))
-  #     profileVariableList <- profileVarsDF
-  #     tableID <- tableID[!(tableID %in% vbpv)]
-  #    }else{
-  #     profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
-  #     profileVariableList <- NULL
-  #    }
-  # }else{
-  profileVarsDF <- CV.VARS %>% filter(table_id %in% tableID)
-  profileVariableList <- NULL
-  # }
-  for(i in 1:length(tableID)){
-    vb <- tableID[i]
-    dispVars <- profileVarsDF %>% filter(table_id==vb)
-    if(test==FALSE)message(cat("-----------\n table_id for review: ",unlist(unique(dispVars$concept)),"\n-----------\n"))
-    # Select columns; option to display all cols.
-    if(allCols==FALSE){
-      dispVars <- dispVars %>% select(name,label,type)
-    }
-    if(test==FALSE)print(dispVars,n=100)
-    ifelse(test==FALSE,
-           user_input <- readline("Which numbers do we want to keep? (`stop`,`all`,`type`,number array):"),
-           user_input <- "all")
-    if(user_input != 'stop'){
-      if(user_input=="type"){
-        user_input_b <- readline("Which type should we filter by? (array accepted)")
-        user_input_b <- unlist(strsplit(user_input_b,","))
-        # Check inputs
-        for(x in 1:length(user_input_b)){
-          if(user_input_b[x] %in% c("root","summary","level_1","level_2","level_3","level_4","other")==FALSE){
-            message(paste("Whoops, looks like ",user_input_b[x],"doesn't exist. Please start over and try again."))
-            #saveMe(test=test)
-            stop()
-          }
-        }
-        ui <- user_input_b
-        vC <- dispVars %>% filter(type %in% ui)
-        vC <- vC[["name"]]
-        profileVariableList <- c(profileVariableList,vC)
-        
-        
-      }else{
-        if(user_input=="all"){
-          ui <- c(1:nrow(dispVars))
-        }else{
-          ui <- eval(parse(text=paste("c(",user_input,")",sep="")))
-        }
-        vl <- NULL
-        for(v in 1:length(ui)){
-          vC <- paste(vb,"_",sprintf("%03d",ui[v]),sep="")
-          profileVariableList <- c(profileVariableList,vC)
-        }
-      }
-      
-    }else{
-      #saveMe(profileVariableList,test=test)
-      return(profileVariableList)
-    }
-    if(test==FALSE)message(cat(">> Variables added: ",profileVariableList))
-  }
-  ifelse(test = FALSE,
-         return(profileVariableList),
-         #checkSave(profileVariableList,test=test),
-         return(profileVariableList))
-  
-  # }else if(review==TRUE){
-  #   message("Parameter 'review' is unimplemented as of now.")
-  #   # #TODO Fix this.
-  #   # for(i in 1:length(tableID)){
-  #   #   print(capi("state",table_id=tableID[i],varStartNum = 1, year=2021,state="IL",
-  #   #                          plot = TRUE))
-  #   # 
-  #   #   user_input <- readline("Should I continue? (y/n)  ")
-  #   #   if(user_input != 'y') stop('Exiting since you did not press y')
-  #   # }
-  # }else{
-  # stop("You did not specify any arguments.")
-  # }
-}
-
-cplot <- function(data=NULL,
-                  tableID=NULL,
-                  variables=NULL,
-                  moe=FALSE){
-  if(type_data(data)==5){
-    data <- data$data$type1data
-  }
-  
-  ggplot2::ggplot(data,
-                  aes(x=variable,
-                      y=estimate)) +
-    geom_col() +
-    facet_wrap(vars(name)) + 
-    {if(moe==TRUE){geom_errorbar(aes(ymin=estimate-moe,
-                      ymax=estimate+moe),
-                  width=.2,
-                  position=position_dodge(.9)) }} +
-    coord_flip()
-  
-  
-  
-}

@@ -107,6 +107,8 @@ of tracts, block_groups or other geography from. Options are currently
 
 \item{censusVars}{Passthrough object to bypass get_census_variables}
 
+\item{moe}{Logical parameter to specify whether or not to display margin of error.}
+
 \item{groupPerc}{Logical parameter to specify whether to display percentages by type in tables.}
 
 \item{verbose}{Pass through param to create_profile() for feedback.}

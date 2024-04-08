@@ -10,7 +10,6 @@ geocoder_batch(
   start = NULL,
   limit = NULL,
   na.rm = TRUE,
-  batch = FALSE,
   verbose = TRUE
 )
 }

@@ -735,7 +735,6 @@ capi <- function(year=NULL,
     if(verbose==TRUE)message(paste(dur(st),"Creating type 3/4 data..."))
       
       if(mode=="summarize" || profile==TRUE){
-        if(filterSummary==FALSE || profile==TRUE){
           ## Deal with medians
           data_type_3 <- data_type_1 %>% dplyr::mutate(estimate=ifelse(calculation=="median",NA,estimate))
           data_type_3 <- data_type_3 %>% group_by(table_id,year,variable,concept,labels,calculation,type,varID) %>% 
@@ -754,7 +753,6 @@ capi <- function(year=NULL,
           
           data_type_3 <- data_type_3 %>% relocate(estimate,subtotals, pct,subtotal_by_type,pct_by_type, .after=labels)
 
-        }
         if(filterSummary==TRUE || profile==TRUE){
           data_type_4 <- data_type_3 %>% filter(!(type %in% fsl))
           # ## Deal with medians

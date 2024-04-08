@@ -21,6 +21,10 @@ map_locations(
 
 \item{county}{Parameter to filter by county.}
 
+\item{density}{Logical parameter to display cloropleth instead of dots.}
+
+\item{density_col}{Name of density column in addressList.}
+
 \item{geosObject}{Optional geosObject to speed up processing time.}
 
 \item{verbose}{Logical param to provide feedback.}
