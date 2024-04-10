@@ -942,7 +942,6 @@ get_geocode_radius <- function(filterAddress=NULL,
                                verbose=FALSE,
                                geosObject = NULL
 ){
-  
   ## Deal with "no visible binding for global variable" error 
   feet <- STATEFP <- STUSPS <- NAME <- NAME10 <- COUNTYFP <- GEOID <- 
     GEOID10 <- intersectedArea <- unitArea <- intersectionProp <- 
@@ -950,7 +949,7 @@ get_geocode_radius <- function(filterAddress=NULL,
   
   if(is.null(geography)){
     ##ADDTEST
-    stop("!> get_geocode_radius() requires a geography parameter.")
+    stop("!> get_geocode_radius() | requires a geography parameter.")
   }
   
   if(!(geography %in% c("us","state","county","tract","block group"))){
@@ -968,25 +967,25 @@ get_geocode_radius <- function(filterAddress=NULL,
       rightgeo <- NA
     }
     if(is.na(rightgeo)){
-      stop(paste("!> Malformed geography. Do not recognize '",geography,"'.",sep=""))
+      stop(paste("!> get_geocode_radius() | Malformed geography. Do not recognize '",geography,"'.",sep=""))
     }else{
-      stop(paste("!> Malformed geography. Entered '",geography,"'. Did you mean '",rightgeo,"'?",sep=""))
+      stop(paste("!> get_geocode_radius() | Malformed geography. Entered '",geography,"'. Did you mean '",rightgeo,"'?",sep=""))
     }
   }
   
   if(geography=="state" && !is.null(county)){
-    stop("!> A state-level geography does not require a county. Remove and try again.")
+    stop("!> get_geocode_radius() | A state-level geography does not require a county. Remove and try again.")
   }
   if(geography=="us"){
-    stop("!> get_geocode_radius() does not work on US-level geographies currently.")
+    stop("!> get_geocode_radius() | does not work on US-level geographies currently.")
   }
   if(geography=="us" && (!is.null(county) | !is.null(state))){
-    stop("!> A US-level geography does not require a state or county. Remove and try again.")
+    stop("!> get_geocode_radius() | A US-level geography does not require a state or county. Remove and try again.")
   }
   
   st <- Sys.time()
   if(!is.null(filterAddress) && is.null(filterRadius)){
-    stop("WHOOPS. You forgot to include the radius value. Please submit again.")
+    stop("get_geocode_radius() | WHOOPS. You forgot to include the radius value. Please submit again.")
   }
   
   ## Did I pass geos? If not, find them.
@@ -1031,27 +1030,44 @@ get_geocode_radius <- function(filterAddress=NULL,
   if(verbose==TRUE)message(paste("    -ggr--Fetching geos took ",round(difftime(Sys.time(),st,units = "sec"),2),"  speed up by saving to env."))
   st <- Sys.time()
   
-  
-  # if(verbose==TRUE)message(paste("    -ggr--Stacking geos took ",round(difftime(Sys.time(),st,units = "sec"),2)))
-  # 
-  # st <- Sys.time()
-  
   if(!is.null(filterAddress) | !is.null(coords)){ 
     # Set the radius around the filtered address.
+    
+    ## Account for empty sf. If so, set coords to NULL.
+    if(!is.null(coords)){
+      if(sf::st_is_empty(coords)==TRUE){
+        coords <- NULL
+      }
+    }
+    
     if(is.null(coords)){
       coords <- geocoder(filterAddress,service="tryall")
+      if(is.na(coords)){
+        if(verbose==TRUE)message(paste("     -ggr--No coords supplied, and no geocode found for address. Skipping."))
+        return(NULL)
+      }
       #  coords <- data.frame(long=coords$coords[[1]],lat=coords$coords[[2]])
       
       if(verbose==TRUE)message(paste("    -ggr--Fetching geocode for filter address took ",round(difftime(Sys.time(),st,units = "sec"),2)))
       st <- Sys.time()
       
     }else{
-      if("sf" %in% class(coords)==TRUE){ # Account for sf
-        coords <- sf::st_coordinates(coords)
+      if(inherits(coords,"sf")==TRUE){ # Account for sf
+        if(sf::st_is_longlat(coords)==TRUE){
+          if(verbose==TRUE)message("    -ggr--Valid sf coordinates provided.")
+          coords <- coords
+          coords <- coords %>% sf::st_set_crs(4326)
+        }else{
+          #coords <- sf::st_coordinates(coords) 
+          coords <- data.frame(long=coords[[1]],lat=coords[[2]])
+          coords <- sf::st_as_sf(coords,coords=c("long","lat"))
+          coords <- coords %>% sf::st_set_crs(4326) 
+        }
+      }else{
+        coords <- data.frame(long=coords[[1]],lat=coords[[2]])
+        coords <- sf::st_as_sf(coords,coords=c("long","lat"))
+        coords <- coords %>% sf::st_set_crs(4326) 
       }
-      coords <- data.frame(long=coords[[1]],lat=coords[[2]])
-      coords <- sf::st_as_sf(coords,coords=c("long","lat"))
-      coords <- coords %>% sf::st_set_crs(4326)
       
       if(verbose==TRUE)message(paste("    -ggr--Processing coords took ",round(difftime(Sys.time(),st,units = "sec"),2)))
       st <- Sys.time()

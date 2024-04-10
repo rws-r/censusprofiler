@@ -1180,6 +1180,166 @@ load_data <- function(load_censusVars = FALSE,
   }
 } 
 
+# profile_batch--------------------------
+
+#' Profile Batch
+#' @param batch_name Master name for profile batch.
+#' @param name_column Column with titles or names of entries. If blank, will assume column #1.
+#' @param address_column Column with titles or names of entries. If blank, will assume column #2.
+#' @param year Year for data selection.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
+#' @param variables A vector of all variables requested.
+#' @param geography Geography specification: e.g.: tract, county, state.
+#' @param addressList A dataframe containing addresses for lookup. If
+#'   coordinates are supplied, profile_batch will bypass geocode functions,
+#'   thereby speeding up processing.
+#' @param filterRadius A numeric value specifying the radius in miles around the address.
+#' @param filterByGeoType An irregular geo type to get a smaller overlapping set
+#'   of tracts, block_groups or other geography from. Options are currently
+#'   "metro", "place","combined_statistical_areas". E.g., Find all tracts in Chicago (place).
+#' @param filterByGeoValue A value to find object for filtering. Either NAME or GEOID. 
+#' @param filterSummary Logical parameter to specify whether to filter out summary levels (typically _001 and therefore "root").
+#' @param filterSummaryLevels Explicit description of lowest type denoting summary level. Also excludes lower levels.#' @param state Input (abb. or FIPS) of state for search.
+#' @param state Input (abb. or FIPS) of state for search.
+#' @param county Input (abb. or FIPS) of county for search.
+#' @param tract Input (abb. or FIPS) of tract for search.
+#' @param block_group Input (abb. or FIPS) of block group for search.
+#' @param metro Input (abb. or FIPS) of metropolitan statistical area for search.
+#' @param ggr Internal: to pass a get_geocode_radius() object to function.
+#' @param geosObject Optional, attach geos object to simplify geo processes.
+#' @param verbose Logical parameter to specify whether to produce verbose output.
+#' @param st Internal parameter to provide timestamp consistency.
+#' @param fast Internal parameter for pseudo_tableID and stat table (capi())
+#' @param test Internal parameter for testing suite.
+#' @param simpleReturn Param to return raw data, not formatted.
+#' @param tableID Specification for concept, or group: e.g., "B01001"
+#'
+#' @return A nested list with profile objects.
+#' @export
+#'
+#' @examples \dontrun{
+#' profile_batch <- profile_batch(batch_name = "TEST",addressList =
+#' test,name_column = "Name",address_column = "Address",
+#' tableID="B02001",geography="tract",verbose=T,censusVars =
+#' CV,year=2022,filterRadius = 1)
+#' }
+#' 
+profile_batch <- function(batch_name=NULL,
+                          name_column=NULL,
+                          address_column=NULL,
+                          year=NULL,
+                          tableID=NULL,   
+                          variables=NULL, # Only need to include variable list.
+                          geography=NULL,
+                          addressList=NULL,
+                          filterRadius=NULL,
+                          filterByGeoType=NULL,
+                          filterByGeoValue=NULL,
+                          filterSummary=FALSE,
+                          filterSummaryLevels="root",
+                          dataset_main="acs",
+                          dataset_sub="acs5",
+                          dataset_last=NULL,
+                          censusVars=NULL,  
+                          state=NULL,
+                          county=NULL,
+                          tract=NULL,
+                          block_group=NULL,
+                          metro=NULL,
+                          ggr=NULL,
+                          geosObject=NULL,
+                          simpleReturn=FALSE,
+                          test=FALSE,
+                          fast=FALSE, 
+                          verbose=FALSE,
+                          st=NULL){
+  
+  ## Check if addressList is geocoded.
+  if(verbose==TRUE)message("profile_batch() | Running checks on profile_batch...")
+  if(is.null(addressList)){
+    stop("|> profile_batch requires an addressList object, containing valid addresses. Can also take an sf object with coordinates supplied.")
+  }
+    
+  if(verbose==TRUE)message("profile_batch() | Discovering addresses or coords...")
+  
+  if(is.null(name_column)){
+    stop("|> profile_batch | You must provide a name_column value.")
+  }
+  if(is.null(address_column)){
+    stop("|> profile_batch | You must provide an address_column value.")
+  }
+  
+  if(!is.null(name_column)){
+    nc <- match(name_column,names(addressList))
+  }else{
+    nc <- 1
+  }
+  if(inherits(addressList,"sf")){
+    gc <- match("geometry",names(addressList))
+  }else{
+    gc <- NULL
+  }
+  if(!is.null(address_column)){
+    ac <- match(address_column,names(addressList))
+  }else{
+    ac <- 2
+  }
+  
+  if(inherits(addressList,"sf")){
+    addressList <- addressList[,c(nc,ac,gc)]
+  }else{
+    addressList <- addressList[,c(nc,ac)]
+  }
+
+    en <- nrow(addressList)
+    profile_batch <- list(name=batch_name)
+    sucs <- 0
+    errs <- 0
+
+    if(verbose==TRUE)message("profile_batch() | Beginning iterative batch build...")
+    for(i in 1:en){
+      
+      if(inherits(addressList,"sf")){
+        coords <- addressList[i,"geometry"]
+        filterAddress <- as.character(sf::st_drop_geometry(addressList[i,2]))
+        entryName <- as.character(sf::st_drop_geometry(addressList[i,1]))
+      }else{
+        coords <- NULL
+        filterAddress <- as.character(addressList[i,2])
+        entryName <- as.character(addressList[i,1])
+      }
+
+      profile_entry <- profiler(name = entryName,
+                                year = year,
+                                dataset_main = dataset_main,
+                                dataset_sub = dataset_sub,
+                                dataset_last = dataset_last,
+                                censusVars = censusVars,
+                                tableID = tableID,
+                                variables = variables,
+                                geography = geography,
+                                filterAddress = filterAddress,
+                                filterRadius = filterRadius,
+                                ggr = ggr,
+                                coords = coords,
+                                verbose=verbose)
+      if(!is.null(profile_entry)){
+        pe <- list()
+        pe[[entryName]] <- profile_entry
+        profile_batch <- append(profile_batch,pe) 
+        sucs <- sucs+1
+      }else{
+        errs <- errs+1
+      }
+    }
+    message(paste("profile_batch complete. ",sucs," successful profiles built, with ",errs," errors/noncompletes.",sep=""))
+    return(profile_batch)
+}
+
+
 # profile_helper-------------------------
 
 #' Profile Helper

@@ -10,6 +10,7 @@
 #' @param geography Specifying geography: e.g., "tract", "county"
 #' @param filterAddress An address input used to generate a radius around, for filtering data.
 #' @param filterRadius A numeric value specifying the radius in miles around the address.
+#' @param coords An sf coordinate object for get_geocode_radius.
 #' @param filterByGeoType An irregular geo type to get a smaller overlapping set
 #'   of tracts, block_groups or other geography from. Options are currently
 #'   "metro", "place","combined_statistical_areas". E.g., Find all tracts in Chicago (place).
@@ -69,6 +70,7 @@ capi <- function(year=NULL,
                  geography=NULL,
                  filterAddress=NULL,
                  filterRadius=NULL,
+                 coords=NULL,
                  ggr=NULL,
                  geosObject=NULL,
                  mode="table",  
@@ -395,14 +397,15 @@ capi <- function(year=NULL,
 
 
   ### Get geography filters if address and radius or geo type is supplied. ---------------
-   if(!is.null(filterAddress) | !is.null(filterByGeoType)){
-     if(!is.null(filterAddress)){ 
+   if(!is.null(filterAddress) | !is.null(filterByGeoType) | !is.null(coords)){
+     if(!is.null(filterAddress) | !is.null(coords)){ 
        if(verbose==TRUE)message(paste(dur(st),"Filtering geosObject by address and radius..."))
        
        if(is.null(ggr)){
          if(verbose==TRUE)message(paste(dur(st),"Finding geo area by radius..."))
          ggr <- get_geocode_radius(filterAddress = filterAddress,
                                    filterRadius = filterRadius,
+                                   coords = coords,
                                    geography = geography,
                                    geosObject = geosObject,
                                    year = year,
@@ -413,6 +416,7 @@ capi <- function(year=NULL,
          if(verbose==TRUE)message(paste(dur(st),"Finding geo area by radius..."))
          ggr <- get_geocode_radius(filterByGeoType = filterByGeoType,
                                    filterByGeoValue = filterByGeoValue,
+                                   coords = coords,
                                    geography = geography,
                                    state = state,
                                    geosObject = geosObject,
@@ -537,12 +541,12 @@ capi <- function(year=NULL,
   }else{
     stop("!> No geography provided.")
   }
-  
+
 ## Make GET Call -----------------------------------------------------------
   if(verbose==TRUE)message(paste(dur(st),"GET CALL: ",url,path,"?get=",paste(varlist,",NAME",sep=""),"&for=",forgeo,"&in=",ingeo,sep=""))
   
   if(verbose==TRUE)message(paste(dur(st),"Initiate GET call..."))
-  
+
   # Run GET on number of chunks if large number of variables 
   data <- list()
   for(d in 1:chunks){

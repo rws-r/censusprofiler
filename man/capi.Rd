@@ -11,6 +11,7 @@ capi(
   geography = NULL,
   filterAddress = NULL,
   filterRadius = NULL,
+  coords = NULL,
   ggr = NULL,
   geosObject = NULL,
   mode = "table",
@@ -53,6 +54,8 @@ variables—either full ("B01001_001") or numeric (c(1:8)).}
 \item{filterAddress}{An address input used to generate a radius around, for filtering data.}
 
 \item{filterRadius}{A numeric value specifying the radius in miles around the address.}
+
+\item{coords}{An sf coordinate object for get_geocode_radius.}
 
 \item{ggr}{Internal: to pass a get_geocode_radius() object to function.}
 

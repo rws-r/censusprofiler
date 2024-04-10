@@ -12,6 +12,7 @@
 #' @param geography Geography specification: e.g.: tract, county, state.
 #' @param filterAddress An address input used to generate a radius around, for filtering data.
 #' @param filterRadius A numeric value specifying the radius in miles around the address.
+#' @param coords An sf coordinate object for get_geocode_radius.
 #' @param filterByGeoType An irregular geo type to get a smaller overlapping set
 #'   of tracts, block_groups or other geography from. Options are currently
 #'   "metro", "place","combined_statistical_areas". E.g., Find all tracts in Chicago (place).
@@ -49,6 +50,7 @@ profiler <- function(name=NULL,
                      geography=NULL,
                      filterAddress=NULL,
                      filterRadius=NULL,
+                     coords=NULL,
                      filterByGeoType=NULL,
                      filterByGeoValue=NULL,
                      filterSummary=FALSE,
@@ -77,7 +79,7 @@ profiler <- function(name=NULL,
     return(x)
   }
   
-  if(verbose==TRUE)message("Getting CV...")
+  if(verbose==TRUE)message("profiler() | Getting CV...")
   if(is.null(censusVars)){ 
     CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
   }else{
@@ -90,41 +92,48 @@ profiler <- function(name=NULL,
 
   if(is.null(geography)){
     ##ADDTEST
-    stop("!> You need to include a geography parameter.")
+    stop("!> profiler() |  You need to include a geography parameter.")
   }
   
   if(is.null(year)){
-    stop("!> Year value is required to make a profile.")
+    stop("!> profiler() | Year value is required to make a profile.")
+  }
+  
+  if((!is.null(filterAddress) | !is.null(coords)) & is.null(filterRadius)){
+    stop("!> profiler() | You must include a filterRadius value if using filterAddress or coords.")
   }
   
 # Get geography -----------------------------------------------------------
 
   ## Get ggr object to pass to capi()
-  if(!is.null(filterAddress) | !is.null(filterByGeoType)){
-    if(!is.null(filterAddress)){ 
-      if(verbose==TRUE)message(paste(dur(st),"Filtering geos by address and radius..."))
+  if(!is.null(filterAddress) | !is.null(filterByGeoType | !is.null(coords))){
+    if(!is.null(filterAddress) | !is.null(coords)){ 
+      if(verbose==TRUE)message(paste("profiler() | ",dur(st),"Filtering geos by address and radius..."))
       
       if(is.null(ggr)){
-        if(verbose==TRUE)message(paste(dur(st),"Finding geo area by radius..."))
+        if(verbose==TRUE)message(paste("profiler() | ",dur(st),"Finding geo area by radius..."))
         ggr <- get_geocode_radius(filterAddress = filterAddress,
                                   filterRadius = filterRadius,
+                                  coords = coords,
                                   geography = geography,
                                   year = year,
-                                  profile = TRUE)
+                                  profile = TRUE,
+                                  verbose = verbose)
       }
     }else{
       if(is.null(ggr)){
-        if(verbose==TRUE)message(paste(dur(st),"Finding geo area by radius..."))
+        if(verbose==TRUE)message(paste("profiler() | ",dur(st),"Finding geo area by radius (filterByGeoType)..."))
         ggr <- get_geocode_radius(filterByGeoType = filterByGeoType,
                                   filterByGeoValue = filterByGeoValue,
                                   geography = geography,
                                   state = state,
                                   year = year,
-                                  profile = TRUE)
+                                  profile = TRUE,
+                                  verbose = verbose)
       }
     }
   }else{
-    if(verbose==TRUE)message(paste(dur(st),"Getting geo var list..."))
+    if(verbose==TRUE)message(paste("profiler() | ",dur(st),"Getting geo var list..."))
     if(is.null(geosObject)){
       geosObject <- geo_var_builder(geography=c("state","county",geography),
                                     try="local",
@@ -136,8 +145,16 @@ profiler <- function(name=NULL,
     }
   }
   
-  if(verbose==TRUE)message(paste(dur(st),"Building data profile..."))
-  ## Execute capi() with supplied parameters.
+  ## If failure in geocode or coord lookup (or other geography parameters), stop
+  ## implementation, as we cannot proceed.
+  if(is.null(ggr)){
+    if(verbose==TRUE)message("profiler() | No geo found for supplied parameters. Cannot complete profile.")
+    return(NULL)
+  }else{
+    
+    
+    if(verbose==TRUE)message(paste("profiler() | ",dur(st),"Building data profile..."))
+    ## Execute capi() with supplied parameters.
     
     data <- capi(year=year,
                  tableID=tableID,
@@ -145,6 +162,7 @@ profiler <- function(name=NULL,
                  geography=geography,
                  filterAddress=filterAddress,
                  filterRadius=filterRadius,
+                 coords=coords,
                  filterByGeoType = filterByGeoType,
                  filterByGeoValue = filterByGeoValue,
                  filterSummaryLevels=filterSummaryLevels,
@@ -182,6 +200,7 @@ profiler <- function(name=NULL,
     }else{
       df <- data
     }
-  
-  return(df)
+    
+    return(df)
+  }
 }
