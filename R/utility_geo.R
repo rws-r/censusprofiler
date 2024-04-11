@@ -1079,18 +1079,15 @@ get_geocode_radius <- function(filterAddress=NULL,
     
     st <- Sys.time()
     ## Get state from filterAddress / coords
-    #statefp <- sf::st_filter(geo_states, coords, .predicate = sf::st_contains)$STATEFP
     statefp <- sf::st_filter(geo_states, buffer, .predicate = sf::st_intersects)$STATEFP
-    #state <- as.numeric(state)
     if(geography=="state"){
       countyfp <- NULL
     }else{
       geo_counties <- geo_counties %>% filter(STATEFP %in% statefp)
-      #countyfp <- sf::st_filter(geo_counties, coords, .predicate = sf::st_contains)$COUNTYFP
-      countyfp <- sf::st_filter(geo_counties, buffer, .predicate = sf::st_intersects)$COUNTYFP
-      #county <- as.numeric(county)
+      countyfp <- sf::st_filter(geo_counties, buffer, .predicate = sf::st_intersects)
     }
   }else if(!is.null(filterByGeoType)){
+    # TODO Fix this to allow for state/county overlap of geo area. See fix above.
     message(paste(dur(st),"Finding geos by supplied geo object..."))
     if(is.null(filterByGeoValue)){
       stop("Error in filterByGeoType: must supply value for filtering.")
@@ -1229,13 +1226,26 @@ get_geocode_radius <- function(filterAddress=NULL,
     }else{
       CT <- geo_states
     }
-    if(!is.null(statefp)){
-      CT <- CT %>% filter(STATEFP == statefp)
-    }
     if(!is.null(countyfp)){
-      CT <- CT %>% filter(COUNTYFP %in% countyfp)
+      for(i in 1:nrow(countyfp)){
+        if(i<2){
+          stfp <- as.character(sf::st_drop_geometry(countyfp[i,"STATEFP"]))
+          ctfp <- as.character(sf::st_drop_geometry(countyfp[i,"COUNTYFP"]))
+          ctCT <- CT %>% filter(STATEFP==stfp & COUNTYFP==ctfp)
+        }else{
+          stfp <- as.character(sf::st_drop_geometry(countyfp[i,"STATEFP"]))
+          ctfp <- as.character(sf::st_drop_geometry(countyfp[i,"COUNTYFP"]))
+          ctCTi <- CT %>% filter(STATEFP==stfp & COUNTYFP==ctfp)
+          ctCT <- rbind(ctCT,ctCTi)
+        }
+      }
+      CT <- ctCT
+    }else{
+      if(!is.null(statefp)){
+        CT <- CT %>% filter(STATEFP %in% statefp)
+      }
     }
-    
+
     if(verbose==TRUE)message(paste("    -ggr--Filtering tracts took ",round(difftime(Sys.time(),st,units = "sec"),2)))
     st <- Sys.time()
     CT <- CT %>% sf::st_transform('+proj=longlat +datum=WGS84')
@@ -1273,7 +1283,6 @@ get_geocode_radius <- function(filterAddress=NULL,
     }
     
     st <- Sys.time()
-    
     # Get a list of counties and states in filtered list.
     CTng <- sf::st_drop_geometry(CT)
     states <- unique(CTng$STATEFP)
