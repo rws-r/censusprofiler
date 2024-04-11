@@ -425,7 +425,7 @@ entropyIndex <- function(data=NULL,
     if(type_data(data)==5){
       data <- data$data$type2data
     }else{
-      if(type_data(data)!=2){
+      if(type_data(data)!=2 | type_data(data!=7)){
         stop("You need to supply type_2_data.")
       }
     }
@@ -1181,7 +1181,7 @@ load_data <- function(load_censusVars = FALSE,
 } 
 
 # profile_batch--------------------------
-
+#TODO add tests for profile_batch() 
 #' Profile Batch
 #' @param batch_name Master name for profile batch.
 #' @param name_column Column with titles or names of entries. If blank, will assume column #1.
@@ -1296,11 +1296,13 @@ profile_batch <- function(batch_name=NULL,
 
     en <- nrow(addressList)
     profile_batch <- list(name=batch_name)
+    profiles <- list()
     sucs <- 0
     errs <- 0
 
     if(verbose==TRUE)message("profile_batch() | Beginning iterative batch build...")
     for(i in 1:en){
+      if(verbose==TRUE)message(paste("profile_batch() | Iteration ",i,"/",en," (",round(i/en,1)*100,"%)",sep=""))
       
       if(inherits(addressList,"sf")){
         coords <- addressList[i,"geometry"]
@@ -1311,7 +1313,7 @@ profile_batch <- function(batch_name=NULL,
         filterAddress <- as.character(addressList[i,2])
         entryName <- as.character(addressList[i,1])
       }
-
+      
       profile_entry <- profiler(name = entryName,
                                 year = year,
                                 dataset_main = dataset_main,
@@ -1324,17 +1326,20 @@ profile_batch <- function(batch_name=NULL,
                                 filterAddress = filterAddress,
                                 filterRadius = filterRadius,
                                 ggr = ggr,
+                                geosObject = geosObject,
                                 coords = coords,
                                 verbose=verbose)
       if(!is.null(profile_entry)){
         pe <- list()
         pe[[entryName]] <- profile_entry
-        profile_batch <- append(profile_batch,pe) 
+        profiles <- append(profiles,pe) 
         sucs <- sucs+1
       }else{
         errs <- errs+1
       }
     }
+    profile_batch <- append(profile_batch,
+                            list(profiles=profiles))
     message(paste("profile_batch complete. ",sucs," successful profiles built, with ",errs," errors/noncompletes.",sep=""))
     return(profile_batch)
 }
@@ -1480,6 +1485,51 @@ profile_helper <- function(tableID=NULL,
   # }else{
   # stop("You did not specify any arguments.")
   # }
+}
+
+#profile_summary-----------
+#TODO Add tests for profile_summary
+## Function to capture and summarize data across entire profile_batch object.
+profile_summary <- function(data=NULL,
+                            tableID=NULL,
+                            variables=NULL,
+                            dataType=3){
+  
+  if(!(dataType %in% c(1:4))){
+    stop("!> profile_summary | Invalid dataType.")
+  }
+  
+  for(i in 1:length(data$profiles)){
+    df <- data$profiles[[i]]$data[[dataType]]
+    
+    df <- df %>% dplyr::mutate(name = data$profiles[[i]]$info$name,
+                               address = data$profiles[[i]]$info$address,
+                               radius = data$profiles[[i]]$info$radius,
+                               geoid = paste(data$profiles[[i]]$info$geoid,collapse=","))
+    
+    if(!is.null(data$profiles[[i]]$info$block_groups)){
+      df <- df %>% dplyr::mutate(block_groups = paste(data$profiles[[i]]$info$block_groups,collapse = ","))
+    }
+    if(!is.null(data$profiles[[i]]$info$tracts)){
+      df <- df %>% dplyr::mutate(tracts = paste(data$profiles[[i]]$info$tracts,collapse = ","))
+    }
+    if(!is.null(data$profiles[[i]]$info$counties)){
+      df <- df %>% dplyr::mutate(counties = paste(data$profiles[[i]]$info$counties,collapse = ","))
+    }
+    if(!is.null(data$profiles[[i]]$info$states)){
+      df <- df %>% dplyr::mutate(states = paste(data$profiles[[i]]$info$states,collapse = ","))
+    }
+    
+    df <- merge(data$profiles[[i]]$info$coordinates,df)
+    
+    if(i==1){
+      combinedData <- df
+    }else{
+      combinedData <- rbind(combinedData,df)
+    }
+  }
+  attr(combinedData,"dataType") <- 7
+  return(combinedData)
 }
 
 # pseudo_tableID--------------------------------------
@@ -2179,56 +2229,63 @@ theme_censusprofiler <- function(x,...){
 #' }
 type_data <- function(dataset,
                       return=FALSE){
-  ## Check to see if we have a full profile object.
-  if(all(class(dataset)=="list")==TRUE){
-    if(all(names(dataset)==c("info","data"))==TRUE &&
-       all(names(dataset$data)==c("type1data",
-                                  "type2data",
-                                  "type3data",
-                                  "type4data"))==TRUE){
-      check <- 5
-      df <- dataset 
-      ## Check to see if we have a direct profile object (no info)
-    }else if(all(names(dataset$data)==c("type1data",
-                                        "type2data",
-                                        "type3data",
-                                        "type4data"))==TRUE){
-      check <- 6
-      df <- dataset                                     
-    }else{
-      stop("!> Unknown format. Requires a censusprofiler object. Create one using profiler().")
-    }
-    ## If not profile, check to see if this is a single valid censusprofiler data object.
-  }else if(length(class(dataset))==3){
-    if(all(class(dataset)==c("tbl_df",
-                             "tbl",
-                             "data.frame"))==TRUE && 
-       all(c("table_id",
-             "varID",
-             "dt") %in% names(dataset))){
-      check <- unique(dataset$dt)
-      if(length(check)>1)stop("!> Error in data check. Multiple values in dt column.")
-      df <- dataset 
-    }else{  
-      stop("!> Unknown datatype. Requires a well-formed censusprofiler object. Create one using profiler().")
-    }
-  }else if(length(class(dataset))==4){
-    if(all(class(dataset)==c("grouped_df",
-                             "tbl_df",
-                             "tbl",
-                             "data.frame"))==TRUE && 
-       all(c("table_id",
-             "varID",
-             "dt") %in% names(dataset))){
-      check <- unique(dataset$dt)
-      if(length(check)>1)stop("!> Error in data check. Multiple values in dt column.")
-      df <- dataset 
-    }else{  
-      stop("!> Unknown datatype. Requires a well-formed censusprofiler object. Create one using profiler().")
-    }
-  }else{
-    stop("!> Unknown format / data. Requires a well-formed censusprofiler object. Create one using profiler().")
+  check <- attr(dataset,"dataType")
+  df <- dataset
+  if(is.null(check)){
+    stop("!> type_data | Not a valid censusprofiler object. Create one using profiler(), profile_batch(), profile_summary(), or capi().")
   }
+  # ## Check to see if we have a full profile object.
+  # if(all(class(dataset)=="list")==TRUE){
+  #   if(all(names(dataset)==c("info","data"))==TRUE &&
+  #      all(names(dataset$data)==c("type1data",
+  #                                 "type2data",
+  #                                 "type3data",
+  #                                 "type4data"))==TRUE){
+  #     check <- 5
+  #     df <- dataset 
+  #     ## Check to see if we have a direct profile object (no info)
+  #   }else if(all(names(dataset$data)==c("type1data",
+  #                                       "type2data",
+  #                                       "type3data",
+  #                                       "type4data"))==TRUE){
+  #     check <- 6
+  #     df <- dataset                                     
+  #   }else{
+  #     stop("!> Unknown format. Requires a censusprofiler object. Create one using profiler().")
+  #   }
+  #   ## If not profile, check to see if this is a single valid censusprofiler data object.
+  # }else if(length(class(dataset))==3){
+  #   if(all(class(dataset)==c("tbl_df",
+  #                            "tbl",
+  #                            "data.frame"))==TRUE && 
+  #      all(c("table_id",
+  #            "varID",
+  #            "dt") %in% names(dataset))){
+  #     check <- unique(dataset$dt)
+  #     if(length(check)>1)stop("!> Error in data check. Multiple values in dt column.")
+  #     df <- dataset 
+  #   }else{  
+  #     stop("!> Unknown datatype. Requires a well-formed censusprofiler object. Create one using profiler().")
+  #   }
+  # }else if(length(class(dataset))==4){
+  #   if(all(class(dataset)==c("grouped_df",
+  #                            "tbl_df",
+  #                            "tbl",
+  #                            "data.frame"))==TRUE && 
+  #      all(c("table_id",
+  #            "varID",
+  #            "dt") %in% names(dataset))){
+  #     check <- unique(dataset$dt)
+  #     if(length(check)>1)stop("!> Error in data check. Multiple values in dt column.")
+  #     df <- dataset 
+  #   }else{  
+  #     stop("!> Unknown datatype. Requires a well-formed censusprofiler object. Create one using profiler().")
+  #   }
+  # }else if(){
+  #   
+  # }else{
+  #   stop("!> Unknown format / data. Requires a well-formed censusprofiler object. Create one using profiler().")
+  # }
   
   if(return==TRUE){
     return(df)

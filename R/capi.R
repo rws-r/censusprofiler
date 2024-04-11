@@ -709,6 +709,7 @@ capi <- function(year=NULL,
     if(verbose==TRUE)message(paste(dur(st),"Creating type 1 data..."))
     data_type_1 <- data
     data_type_1 <- data_type_1 %>% mutate(dt=1)
+    attr(data_type_1,"dataType") <- 1
 
 ## Filter summaries --------------------------------------------------------
     if(verbose==TRUE)message(paste(dur(st),"Creating type 2 data..."))
@@ -730,6 +731,7 @@ capi <- function(year=NULL,
     
       data_type_2 <- data_type_1 %>% filter(!(type %in% fsl))
       data_type_2 <- data_type_2 %>% mutate(dt=2)
+      attr(data_type_2,"dataType") <- 2
     }
 
  ## Up to this point ^^^ is `type 1/2` data.
@@ -756,9 +758,11 @@ capi <- function(year=NULL,
             ungroup()
           
           data_type_3 <- data_type_3 %>% relocate(estimate,subtotals, pct,subtotal_by_type,pct_by_type, .after=labels)
+          attr(data_type_3,"dataType") <- 3
 
         if(filterSummary==TRUE || profile==TRUE){
           data_type_4 <- data_type_3 %>% filter(!(type %in% fsl))
+          attr(data_type_4,"dataType") <- 4
           # ## Deal with medians
           # data_type_4 <- data_type_2 %>% dplyr::mutate(estimate=ifelse(calculation=="median",NA,estimate))
           # data_type_4 <- data_type_4 %>% group_by(table_id,year,variable,concept,labels,calculation,type,varID) %>% 
@@ -793,6 +797,7 @@ capi <- function(year=NULL,
                  type3data = data_type_3,
                  type4data = data_type_4
                  )
+    attr(data,"dataType") <- 6
   }
   return(data)
 }

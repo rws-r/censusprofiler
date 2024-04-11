@@ -118,6 +118,7 @@ profiler <- function(name=NULL,
                                   geography = geography,
                                   year = year,
                                   profile = TRUE,
+                                  geosObject = geosObject,
                                   verbose = verbose)
       }
     }else{
@@ -129,6 +130,7 @@ profiler <- function(name=NULL,
                                   state = state,
                                   year = year,
                                   profile = TRUE,
+                                  geosObject = geosObject,
                                   verbose = verbose)
       }
     }
@@ -186,6 +188,7 @@ profiler <- function(name=NULL,
                    year = year,
                    coordinates = ggr$coordinates,
                    buffer = ggr$buffer,
+                   geoid = ggr$geoid,
                    states = ggr$states,
                    counties = ggr$counties)
       if(geography=="tract"){
@@ -197,6 +200,7 @@ profiler <- function(name=NULL,
       
       df <- list(info = info,
                  data = data)
+      attr(df,"dataType") <- 5
     }else{
       df <- data
     }
