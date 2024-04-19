@@ -106,7 +106,7 @@ profiler <- function(name=NULL,
 # Get geography -----------------------------------------------------------
 
   ## Get ggr object to pass to capi()
-  if(!is.null(filterAddress) | !is.null(filterByGeoType | !is.null(coords))){
+  if(!is.null(filterAddress) || !is.null(filterByGeoType) || !is.null(coords)){
     if(!is.null(filterAddress) | !is.null(coords)){ 
       if(verbose==TRUE)message(paste("profiler() | ",dur(st),"Filtering geos by address and radius..."))
       
