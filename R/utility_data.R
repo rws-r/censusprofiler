@@ -336,7 +336,8 @@ dur <- function(st){
 #' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
 #' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
 #' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
-#' @param censusVars Passthrough object to bypass get_census_variables #' 
+#' @param censusVars Passthrough object to bypass get_census_variables 
+#' @param geosObject Passthrough object to bypass get_geocode_radius
 #' @param verbose Logical parameter to specify whether to produce verbose output.
 #' 
 #'
@@ -349,7 +350,7 @@ dur <- function(st){
 #' c(1:4),year=2022,verbose=TRUE,filterAddress = v,filterRadius = 1)
 #' }
 entropyIndex <- function(data=NULL,
-                         dataType="long", # c("long","wide","vector")
+                         dataFormat="long", # c("long","wide","vector")
                          dissimilarityValue=NULL, # for dissimilarity index, selecting minority group
                          dissimilarityValueB=NULL, # for exposure/isolation index, selecting minority group
                          geography="tract",
@@ -373,6 +374,7 @@ entropyIndex <- function(data=NULL,
                          dataset_sub="acs5",
                          dataset_last=NULL,
                          censusVars=NULL,
+                         geosObject=NULL,
                          verbose=FALSE){
   
   table_id <- variable <- concept <- estimate <- pct <- 
@@ -412,33 +414,44 @@ entropyIndex <- function(data=NULL,
                      tract=tract,
                      block_group=block_group,
                      censusVars=CV,
+                     geosObject = geosObject,
                      verbose=verbose)
   }
   
   ## Error Checking
   if(verbose==TRUE)message("   - EI: error checking...")
-  if(dataType=="vector"){
+  if(dataFormat=="vector"){
     if(!is.vector(data)){
-      stop("You have not supplied a vector, per specified dataType.")
+      stop("You have not supplied a vector, per specified dataFormat.")
     }
   }else{
-    if(type_data(data)==5){
+    td <- type_data(data)
+    if(td==5){
       data <- data$data$type2data
     }else{
-      if(type_data(data)!=2 | type_data(data!=7)){
-        stop("You need to supply type_2_data.")
+      if(td!=2 & td!=8){
+        stop("You need to supply type_2_data or profile_summary data.")
       }
     }
   }
-  
+
   if(!(tableID %in% data$table_id)){
     stop("That tableID does not exist in the data provided.")
   }
-  
+
   ## Data Cleaning and preparation
   if(verbose==TRUE)message("   - EI: cleaning data...")
-  if(dataType!="vector"){
-    data <- data %>% ungroup() %>% select(table_id,variable,year,concept,labels,estimate,subtotal,pct,name,geoid,geography,type)
+  if(dataFormat!="vector"){
+    if(type_data(data)==2){
+      data <- data %>% ungroup()
+      data <- data[c("table_id","variable","year","concept","labels","estimate","subtotal","pct","name","geoid","geography","type")]
+    }else{
+      if(inherits(data,"sf")==TRUE){
+        data <- sf::st_drop_geometry(data)
+      }
+      data <- data %>% ungroup()
+      data <- data[c("table_id","variable","year","concept","labels","estimate","subtotal","pct","name","type")]
+    }
     data <- data %>% filter(table_id==tableID)
     
     if(!is.null(variables)){
@@ -503,16 +516,16 @@ entropyIndex <- function(data=NULL,
       }
     }
   }
-  
+
   ## Run Program 
   if(verbose==TRUE)message("   - EI: running processEntropy()...")
-  if(dataType=="wide"){
+  if(dataFormat=="wide"){
     if(verbose==TRUE)message("   - EI: using wide data...")
     if(is.null(wideCols)){
       stop("Please include columns by number or name")
     }
     
-  }else if(dataType=="long"){
+  }else if(dataFormat=="long"){
     if(verbose==TRUE)message("   - EI: using long data...")
     # Get reference variables
     if(is.null(tableID)){
@@ -1302,7 +1315,7 @@ profile_batch <- function(batch_name=NULL,
 
     if(verbose==TRUE)message("profile_batch() | Beginning iterative batch build...")
     for(i in 1:en){
-      if(verbose==TRUE)message(paste("profile_batch() | Iteration ",i,"/",en," (",round(i/en,1)*100,"%)",sep=""))
+      if(verbose==TRUE)message(paste("profile_batch() | Iteration ",i,"/",en," (",round(i/en,2)*100,"%)",sep=""))
       
       if(inherits(addressList,"sf")){
         coords <- addressList[i,"geometry"]
@@ -1341,6 +1354,7 @@ profile_batch <- function(batch_name=NULL,
     profile_batch <- append(profile_batch,
                             list(profiles=profiles))
     message(paste("profile_batch complete. ",sucs," successful profiles built, with ",errs," errors/noncompletes.",sep=""))
+    attr(profile_batch,"dataType") <- 7
     return(profile_batch)
 }
 
@@ -1528,7 +1542,7 @@ profile_summary <- function(data=NULL,
       combinedData <- rbind(combinedData,df)
     }
   }
-  attr(combinedData,"dataType") <- 7
+  attr(combinedData,"dataType") <- 8
   return(combinedData)
 }
 
@@ -1565,6 +1579,689 @@ pseudo_tableID <- function(vars,
   #   }
   # }
   return(tid)
+}
+
+# segregationMeasures -------------------------
+#' Segration Measures 
+#' 
+#' A statistical function to estimate diversity / segregation in datasets.
+#'
+#'
+#' @param data A data object for which to estimate entropy. 
+#' @param dataType Can choose "long", "wide" or "vector" depending on data object type.
+#' @param geography Defaults to "tract," but must match data object.
+#' @param wideCols Specified columns for calculating entropy in wide data.
+#' @param longCol Specified columns for calculating entropy in long data.
+#' @param tableID TableID specification for calculating entropy.
+#' @param variables Variable specification for calculating entropy.
+#' @param dissimilarityValue For dissimilarity index, selecting minority group.
+#'   Numeric value corresponding to variable.
+#' @param dissimilarityValueB For exposure/isolation index, selecting minority
+#'   group. Numeric value corresponding to variable.
+#' @param filterAddress For data calls, a filtered area specification.
+#' @param filterRadius For data calls, a filtered area specification.
+#' @param state Input (abb. or FIPS) of state for search.
+#' @param county Input (abb. or FIPS) of county for search.
+#' @param tract Input (abb. or FIPS) of tract for search.
+#' @param block_group Input (abb. or FIPS) of block group for search.
+#' @param year Year for data call.
+#' @param filterSummary Logical parameter to specify whether to filter out summary levels (typically _001 and therefore "root").
+#' @param filterSummaryLevels Explicit description of lowest type denoting summary level. Also excludes lower levels.#' 
+#' @param return Logical parameter. If TRUE, return value only. Otherwise return formatted string.
+#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' @param censusVars Passthrough object to bypass get_census_variables 
+#' @param geosObject Passthrough object to bypass get_geocode_radius
+#' @param tips Logical parameter specifying whether to include helpful tips.
+#' @param verbose Logical parameter to specify whether to produce verbose output.
+#' 
+#'
+#' @return dataframe
+#' @export
+#' 
+#'
+#' @examples \dontrun{
+#' entropyIndex(data=NULL,tableID = "B11012",variables =
+#' c(1:4),year=2022,verbose=TRUE,filterAddress = v,filterRadius = 1)
+#' }
+segregationMeasures <- function(data=NULL,
+                         dataFormat="long", # c("long","wide","vector")
+                         majorityVar=NULL, # for dissimilarity index, selecting minority group
+                         minorityVar=NULL, # for exposure/isolation index, selecting minority group
+                         geography="tract",
+                         wideCols=NULL,
+                         longCol="pct",
+                         filterSummary=FALSE,
+                         filterSummaryLevels="root", # default
+                         tableID=NULL,
+                         variables=NULL,
+                         filterAddress=NULL,
+                         filterRadius=NULL,
+                         state=NULL,
+                         county=NULL,
+                         tract=NULL,
+                         block_group=NULL,
+                         year=NULL,
+                         return=FALSE,
+                         tips=FALSE,
+                         dataset_main="acs",
+                         dataset_sub="acs5",
+                         dataset_last=NULL,
+                         censusVars=NULL,
+                         geosObject=NULL,
+                         verbose=FALSE){
+  
+  table_id <- variable <- concept <- estimate <- pct <- 
+    pct_by_type <- subtotal <- pct <- name <- geoid <- type <- 
+    est_total <- sub_total <- NULL
+  
+  if(verbose==TRUE)message("segregationMeasures() | Getting CV...")
+  if(is.null(censusVars)){ 
+    if(is.null(year)){
+      stop("Cannot get census variables without year supplied. Either include year, or attach censusVars object.")
+    }
+    CV <- get_census_variables(year=year, 
+                               dataset_main = dataset_main, 
+                               dataset_sub = dataset_sub, 
+                               dataset_last = dataset_last)
+  }else{
+    CV <- censusVars
+  }
+  CV.VARS <- CV[[1]]
+  CV.GROUPS <- CV[[2]]
+  
+  if(is.null(tableID)){
+    stop("No tableID supplied. Please try again.")
+  }
+  ### Init 
+  if(!is.null(tableID) || !is.null(variables)){
+    viC <- varInputCheck(tableID=tableID,variables=variables)
+    variables <- viC$variables
+  }
+  
+  ## Create data object if does not exist
+  if(is.null(data)){
+    data <- profiler(year=year,
+                     tableID=tableID,
+                     variables=variables,
+                     geography=geography,
+                     filterAddress=filterAddress,
+                     filterRadius=filterRadius,
+                     filterSummary=filterSummary,
+                     filterSummaryLevels=filterSummaryLevels,
+                     state=state,
+                     county=county,
+                     tract=tract,
+                     block_group=block_group,
+                     censusVars=CV,
+                     geosObject = geosObject,
+                     verbose=verbose)
+  }
+  
+  ## Error Checking
+  if(verbose==TRUE)message("   - EI: error checking...")
+  if(dataFormat=="vector"){
+    if(!is.vector(data)){
+      stop("You have not supplied a vector, per specified dataFormat.")
+    }
+  }else{
+    td <- type_data(data)
+    if(td==5){
+      data <- data$data$type2data
+    }else{
+      if(td!=2 & td!=8){
+        stop("You need to supply type_2_data or profile_summary data.")
+      }
+    }
+  }
+  
+  if(!(tableID %in% data$table_id)){
+    stop("That tableID does not exist in the data provided.")
+  }
+  
+  ## Data Cleaning and preparation
+  if(verbose==TRUE)message("   - EI: cleaning data...")
+  if(dataFormat!="vector"){
+    if(type_data(data)==2){
+      data <- data %>% ungroup()
+      data <- data[c("table_id","variable","year","concept","labels","estimate","subtotal","pct","name","geoid","geography","type")]
+    }else{
+      if(inherits(data,"sf")==TRUE){
+        sfdata <- data
+        data <- sf::st_drop_geometry(data)
+      }
+      data <- data %>% ungroup()
+      data <- data[c("table_id","variable","year","concept","labels","estimate","subtotal","pct","name","type")]
+    }
+    data <- data %>% filter(table_id==tableID)
+    
+    if(!is.null(variables)){
+      data <- data %>% filter(variable %in% variables) 
+    }
+    data <- data %>% filter(!is.na(pct))
+    
+    # Create empty entropy table to populate.
+    entropyTableNames <- c("table_id","year","concept","name","geoid","geography","pct","entropyIndex","multiGroupEntropyIndex")
+    entropyTable <- data.frame(matrix(ncol = length(names(entropyTableNames)),nrow = 0))
+    colnames(entropyTable) <- names(entropyTableNames)
+  }
+  
+  ### Build initial variables -----
+  # My reference variables come from this document:
+  # https://www.census.gov/topics/housing/housing-patterns/guidance/appendix-b.html.
+  # Formulas based on Massey and Denton (1998).
+  
+  ## Get whole-area entropy estimates / entropy index
+  # Combine populations
+  
+  data <- spatial_helper(data,geography=geography,
+                         geosObject = geosObject,
+                         verbose = verbose)
+  
+  data <- data %>% mutate(area = sf::st_area(.))
+  data <- data[order(-data$area),]
+
+  area <- data %>% filter(type %in% c("root","summary")) %>% 
+    dplyr::group_by(labels,variable) %>% 
+    dplyr::summarize(est_total = sum(estimate),
+                     sub_total = sum(subtotal),
+                     areaPct = est_total/sub_total)
+  
+  r <- length(unique(area$labels))
+
+  TT <- unique(area$sub_total)
+  
+  A_tot <- sf::st_union(data)
+  A_center <- sf::st_centroid(A_tot)
+  A <- sf::st_area(A_tot)
+  
+  geos <- data %>% dplyr::select(GEOID:AWATER,geometry,area)
+  geos <- unique(geos)
+  geos <- geos[order(geos$area),]
+
+  # get minority/majority populations of areas i
+  iTable <- sf::st_drop_geometry(data) %>% 
+    dplyr::select(variable,GEOID,area,estimate,subtotal) %>% 
+    tidyr::pivot_wider(names_from = variable,values_from = estimate)
+  iTable <- iTable[,c("GEOID",minorityVar,majorityVar,"subtotal","area")]
+  names(iTable) <- c("GEOID","xi","yi","ti","area")
+  iTable <- iTable %>% mutate(pi = ifelse(is.na(xi),0,xi/ti))
+  n <- nrow(iTable)
+  
+  iTableGeo <- data %>% dplyr::select(variable,GEOID,area,estimate,subtotal,geometry) %>% 
+    tidyr::pivot_wider(names_from = variable, values_from = estimate)
+  iTableGeo <- iTableGeo[,c("GEOID",minorityVar,majorityVar,"subtotal","area","geometry")]
+  names(iTableGeo) <- c("GEOID","xi","yi","ti","area","geometry")
+  iTableGeo <- iTableGeo %>% mutate(pi = ifelse(is.na(xi),0,xi/ti))
+  ng <- nrow(iTableGeo)
+
+  # total minority population (all xi)
+  X <- as.numeric(sf::st_drop_geometry(area[area$variable==minorityVar,"est_total"]))
+  
+  # the majority population (non-Hispanic Whites in this report) of area i
+  Y <- as.numeric(sf::st_drop_geometry(area[area$variable==majorityVar,"est_total"]))
+  
+  P <- X/TT
+  
+  ### (A) Measures of Evenness -------------
+  #### Dissimilarity Index------------
+  if(verbose==TRUE)message("Calculating Dissimilarity Index...")
+  dsiTip <- "Dissimilarity Index: `Conceptually, dissimilarity measures the percentage of a group's population that would have to change residence for each neighborhood to have the same percentage of that group as the metropolitan area overall. The index ranges from 0.0 (complete integration) to 1.0 (complete segregation).` [1]"
+  
+  dsip <- NULL
+  dsi <- 0
+  dsi_formula <- NULL
+  for(i in 1:n){
+    ti <- as.numeric(iTable[i,"ti"])
+    pi <- as.numeric(iTable[i,"pi"])
+    dsip <- ti*abs(pi-P)
+    dsi <- dsi+dsip
+    dsi_formula <- paste(dsi_formula,"(",ti,"*|",pi,"-",P,"|)",ifelse(i<n,"+",""),"\n",sep="")
+  }
+  dsi <- dsi / (2*TT*P*(1-P))
+  dsi_formula <- paste(dsi_formula," / (2)(",TT,")(",P,")(1-",P,")",sep="")
+
+  #### Entropy Index --------
+  eniTip <- "Entropy Index: `The entropy index (also called the information index) measures the (weighted) average deviation of each areal unit from the metropolitan area's entropy or racial and ethnic diversity, which is greatest when each group is equally represented in the metropolitan area. The entropy index, like the other two evenness measures, also varies between 0.0 (when all areas have the same composition as the entire metropolitan area) and 1.0 (when all areas contain one group only).` [1]"
+  eni <- 0
+  for(i in 1:n){
+    pi <- as.numeric(iTable[i,"pi"])
+    ti <- as.numeric(iTable[i,"ti"])
+    ## Deal with log(0) problems 
+    ifelse(pi==0,pi <- 0.00000001,pi <- pi)
+    Ei <- pi * log(1/pi) + (1-pi)*log(1/1-pi)
+    E <- P * log(1/P) + (1-P)*log(1/1-P)
+
+    ee <- (ti*(E-Ei))/(E*TT)
+    eni <- eni + ee
+  }
+  
+  #### Multigroup Entropy Index --------
+  if(verbose==TRUE)message("Calculating Multigroup Entropy Index...")
+  # Sourced: https://www2.census.gov/programs-surveys/demo/about/housing-patterns/multigroup_entropy.pdf
+  MGE <- 0
+  ## Part A is the "Diversity Index", describing the level of diversity in the metro area.
+  for(k in 1:r){
+    Pr <- as.numeric(sf::st_drop_geometry(area[k,"areaPct"]))
+    # Account for log(0). See note in article noted above.
+    ifelse(Pr>0,
+           mg <- Pr * log((1/Pr)),
+           mg <- Pr * 0)
+    MGE <- MGE + mg
+  }
+  MetroEntropy <- MGE
+  maxLog <- log(r)
+  
+  # Worth noting that the maximum score occurs when all groups have equal 
+  # representation in the geographic area. So 7 groups should see about 
+  # 14% in every geographic location, each. This is max entropy. And a measure
+  # of diversity.
+
+  ## Part B loops through and assigns entropy for each census tract, on the basis of 
+  ## categories.
+  
+  entropyTable <- sf::st_drop_geometry(data) %>% 
+    dplyr::filter(type %in% c("root","summary")) %>% 
+    dplyr::select(GEOID,variable,area,estimate,pct,subtotal) %>% 
+    dplyr::mutate(entropyScore = NA)
+
+  subAreas <- unique(entropyTable$GEOID)
+  sae <- 0
+  sael_vec <- c()
+  
+  ## Run for each geographic area 
+  for(s in 1:length(subAreas)){
+    sa <- entropyTable[entropyTable$GEOID==subAreas[s],]
+    rr <- length(unique(sa$variable))
+    sael <- 0
+    ## Run for each subgroup/category
+    for(q in 1:rr){
+      Prr <- as.numeric(sa[q,"pct"])
+      # Account for log(0). See note in article noted above.
+      ifelse(Prr>0,
+             mgg <- Prr * log((1/Prr)),
+             mgg <- Prr * 0)
+      sael <- sael + mgg
+    }
+    sae <- sae + sael
+    sael_vec <- c(sael_vec,sael)
+    ## Add individual entropy scores to geographic areas.
+    entropyTable[entropyTable$GEOID==subAreas[s],"entropyScore"] <- sael
+  }
+  
+  ## Part C, calculate Theil's H, or the entropy index.
+  ETsum <- entropyTable %>% dplyr::select(GEOID,area,subtotal,entropyScore) %>% unique()
+
+  H <- 0
+  for(h in 1:nrow(ETsum)){
+    Hti <- ETsum[h,"subtotal"]
+    es <- ETsum[h,"entropyScore"]
+    hh <- (Hti * (MetroEntropy - es)) / (MetroEntropy * TT)
+    H <- H + hh
+  }
+  entropyIndex <- H
+  
+  entropyIndexTip <- "Multi-Group Entropy Index: Unlike the diversity index, or entropy score, the entropy index measures evenness of diversity across a metro area. We are looking here for *homogeneity*, signifying that every tract has about the same representation. If there is variance / diversity among say census tracts within a metro area, we are probably seeing segregation. Because diversity is not evenly spread throughout the metro. Additionally, the EI is a between 0/1 value. 0 indicates maximum integration, whereas 1 would indicate extreme segregation. The sub-category (Metro Entropy) is the so-called 'diversity index,' with a higher number indicating higher proportions of multiple groups. [2]"
+
+  # Unlike the diversity index, or entropy score, the entropy index measures 
+  # evenness of diversity across a metro area. We are looking here for *homogeneity*, 
+  # signifying that every tract has about the same representation. If there is 
+  # variance / diversity among say census tracts within a metro area, we are probably
+  # seeing segregation. Because diversity is not evenly spread throughout the metro.
+  # Additionally, the EI is a between 0/1 value. 0 indicates maximum integration, whereas
+  # 1 would indicate extreme segregation.
+
+  ### (B) Measures of Exposure -------------
+  #### Interaction & Isolation-------
+  if(verbose==TRUE)message("Calculating Interaction and Isolation...")
+  Interaction <- 0
+  Isolation <- 0
+  
+  InteractionTip <- "Interaction Index: `The interaction index measures the exposure of minority group members to members of the majority group as the minority-weighted average of the majority proportion of the population in each areal unit.` [1]"
+  IsolationTip <- "Isolation Index: `The isolation index measures 'the extent to which minority members are exposed only to one another,' (Massey and Denton, p. 288) and is computed as the minority-weighted average of the minority proportion in each area.` [1]"
+  
+  for(i in 1:n){
+    xi <- as.numeric(iTable[i,"xi"])
+    yi <- as.numeric(iTable[i,"yi"])
+    ti <- as.numeric(iTable[i,"ti"])
+    ii <- (xi/X) * (yi/ti)
+    is <- (xi/X) * (xi/ti)
+    Interaction <- Interaction + ii
+    Isolation <- Isolation + is
+  }
+  
+  #### Correlation Ratio (eta squared)----------
+  if(verbose==TRUE)message("Calculating Correlation Ratio...")
+  Correlation <- (Isolation - P) / (1-P)
+  CorrelationTip <- "Correlation Ratio (Eta Squared): `However, when there are more than two groups, the interaction and isolation indexes will not sum to 1.0 (one must add the interaction indexes for all other minority groups to the interaction and isolation indexes for the original minority group to obtain unity). Furthermore, the interaction indexes representing minority exposure to majority members and majority exposure to minority members will be equal only if the two groups constitute the same proportion of the population. An adjustment of the isolation index to control for this asymmetry yields a third exposure index, the correlation ratio, also known as eta-squared.` [1]"
+  
+  ### (C) Measures of Concentration -------------
+  #### Delta ------------
+  if(verbose==TRUE)message("Calculating Delta...")
+  delta <- 0
+  DeltaTip <- "Delta: `One measure of concentration, originally proposed by Hoover (1941), is delta, which 'computes the proportion of [minority] members residing in areal units with above average density of [minority] members' (Massey and Denton, p. 290). The index gives the proportion of a group's population that would have to move across areal units to achieve a uniform density.` [1]"
+
+  for(i in 1:n){
+    xi <- as.numeric(iTable[i,"xi"])
+    ai <- as.numeric(iTable[i,"area"])
+    A <- as.numeric(A)
+    dta <- abs((xi/X)-(ai/A))
+    delta <- delta+dta
+  }
+  Delta <- 0.5 * delta
+  
+  #### Absolute Concentration ------------
+  if(verbose==TRUE)message("Calculating Absolute Concentration...")
+  AbsoluteConcentrationTip <- "Absolute Concentration: `Absolute concentration computes the total area inhabited by a group and compares this with the minimum and maximum areas (the areal sum, respectively, of the fewest number of the geographically smallest and the greatest number of the geographically largest areal units) that could accommodate a group of that size (at observed densities). The index varies from 0.0 to 1.0, where a score of 1.0 means that a group has achieved the maximum spatial concentration possible (all minority members live in the smallest areal units).` [1]" 
+  stl <- iTable[order(iTable$area,decreasing=FALSE),]
+  lts <- iTable[order(iTable$area,decreasing=TRUE),]
+
+  # Get n1 / T1
+  T1 <- 0
+  n1 <- 0
+  while(T1 < X){
+    i <- n1+1
+    ti <- as.numeric(stl[i,"ti"])
+    T1 <- T1 + ti
+    n1 <- n1 + 1
+  }
+
+  # Get n2 / T2
+  T2 <- 0
+  n2 <- 0
+  while(T2 < X){
+    i <- n2+1
+    ti <- as.numeric(lts[i,"ti"])
+    T2 <- T2 + ti
+    n2 <- n2 + 1
+  }
+  # now get rank from bottom up
+  n2 <- nrow(lts)-n2
+
+  # Argument A: The first quantity in the numerator is the average land area of
+  # geographic units inhabited by group X members. Argument B: The second
+  # quantity is the average land area they would inhabit under conditions of
+  # maximum spatial concentration (if all lived in the smallest areal units). In
+  # the denominator, the first quantity is the average land area that would be
+  # inhabited under conditions of minimum concentration (if all minority members
+  # lived in the largest areal units) and from this is subtracted the area
+  # inhabited under maximum concentration. The index thus varies from 0 to 1.0,
+  # where a score of 1.0 means that a group has achieved the maximum spatial
+  # concentration possible (all X members live in the smallest areal units), and
+  # a score of 0 indicates the maximum deconcentration possible (all X members
+  # live in the largest areal units).
+  
+  # Argument A
+  AA <- 0
+  for(i in 1:n){
+    xi <- as.numeric(stl[i,"xi"])
+    ai <- as.numeric(stl[i,"area"])
+    AAa <- (xi * ai) / X
+    AA <- AA + AAa
+  }
+  
+  # Argument B
+  BB <- 0
+  for(i in 1:n1){
+    ti <- as.numeric(stl[i,"ti"])
+    ai <- as.numeric(stl[i,"area"])
+    BBb <- (ti * ai) / T1
+    BB <- BB + BBb
+  }
+
+  # Argument C
+  CC <- 0
+  for(i in n2:n){
+    ti <- as.numeric(stl[i,"ti"])
+    ai <- as.numeric(stl[i,"area"])
+    CCc <- (ti * ai) / T2
+    CC <- CC + CCc
+  }
+  
+  # Argument D
+  DD <- 0
+  for(i in 1:n1){
+    ti <- as.numeric(stl[i,"ti"])
+    ai <- as.numeric(stl[i,"area"])
+    DDd <- (ti * ai) / T1
+    DD <- DD + DDd
+  }
+
+  AbsoluteConcentration <- 1 - ((AA-BB)/(CC-DD))
+
+  # Relative Concentration 
+  if(verbose==TRUE)message("Calculating Relative Concentration...")
+  # Argument A
+  AA <- 0
+  for(i in 1:n){
+    xi <- as.numeric(stl[i,"xi"])
+    ai <- as.numeric(stl[i,"area"])
+    AAa <- (xi * ai) / X
+    AA <- AA + AAa
+  }
+  
+  # Argument B
+  BB <- 0
+  for(i in 1:n){
+    yi <- as.numeric(stl[i,"yi"])
+    ai <- as.numeric(stl[i,"area"])
+    BBb <- (yi * ai) / Y
+    BB <- BB + BBb
+  }
+  
+  # Argument C
+  CC <- 0
+  for(i in 1:n1){
+    ti <- as.numeric(stl[i,"ti"])
+    ai <- as.numeric(stl[i,"area"])
+    CCc <- (ti * ai) / T1
+    CC <- CC + CCc
+  }
+  
+  # Argument D
+  DD <- 0
+  for(i in n2:n){
+    ti <- as.numeric(stl[i,"ti"])
+    ai <- as.numeric(stl[i,"area"])
+    DDd <- (ti * ai) / T2
+    DD <- DD + DDd
+  }
+  
+  RelativeConcentration <- ((AA/BB)-1)/((CC/DD)-1)
+  
+  RelativeConcentrationTip <- "Relative Concentration: `The second, relative concentration, is measured similarly, but takes account of the distribution of the majority group as well. This measure varies from -1.0 to 1.0. A score of 0.0 means that the minority and majority groups are equally concentrated. An index of -1.0 means that the concentration of the majority exceeds that of the minority to the maximum extent, and an index of 1.0 the reverse.` [1]"
+  
+  ### (D) Measures of Centralization -------------
+  #### Absolute / Relative Centralization ------------
+  if(verbose==TRUE)message("Calculating Absolute / Relative Centralization...")
+  iTableGeo <- iTableGeo %>% mutate(centroids = sf::st_centroid(geometry),
+                                    distance = as.numeric(sf::st_distance(centroids,A_center)))
+  iTableGeo <- iTableGeo[order(iTableGeo$distance),]
+  
+  AbsoluteCentralizationTip <- "Absolute centralization examines only the distribution of the minority group around the center and also varies between -1.0 and 1.0. `Positive values indicate a tendency for [minority] group members to reside close to the city center, while negative values indicate a tendency to live in outlying areas. A score of 0 means that a group has a uniform distribution throughout the metropolitan area` (Massey and Denton, p. 293). [1]"
+  RelativeCentralizationTip <- "Relative centralization compares the areal profile of the majority and minority populations, and may be interpreted as the relative share of the minority population that would have to change their area of residence to match the centralization of the majority. The index varies between -1.0 and 1.0 with positive values indicating that minority members are located closer to the center than majority, and negative values the reverse. An index of 0.0 indicates that the two groups have the same spatial distribution around the center. [1]"
+   
+  
+  ACAi <- ACXi <- ACYi <-
+    partA <- partB <- partA_rel <- partB_rel <-
+    xxi <- aai <- yyi <- 0
+  ACAi_vec <- ACXi_vec <- ACYi_vec <- c()
+  
+  for(i in 1:ng){
+    xi <- as.numeric(iTableGeo[i,"xi"])[1]
+    ai <- as.numeric(iTableGeo[i,"area"])[1]
+    yi <- as.numeric(iTableGeo[i,"yi"])[1]
+    xxi <- xxi+xi
+    aai <- aai+ai
+    yyi <- yyi+yi
+    ACAi <- (aai)/A
+    ACAi_vec <- c(ACAi_vec,ACAi)
+    ACXi <- (xxi)/X
+    ACXi_vec <- c(ACXi_vec,ACXi)
+    ACYi <- (yyi)/Y
+    ACYi_vec <- c(ACYi_vec,ACYi)
+    partA <- partA + (ifelse(i==1,0,ACXi_vec[i-1])*ACAi_vec[i])
+    partB <- partB + (ACXi_vec[i]*ifelse(i==1,0,ACAi_vec[i-1]))
+    partA_rel <- partA_rel + (ifelse(i==1,0,ACXi_vec[i-1])*ACYi_vec[i])
+    partB_rel <- partB_rel + (ACXi_vec[i]*ifelse(i==1,0,ACYi_vec[i-1]))
+  }
+  AbsoluteCentralization <- partA-partB
+  RelativeCentralization <- partA_rel-partB_rel
+
+  ### (E) Measures of Clustering -------------
+  #### Index of Spatial Proximity ------------
+  if(verbose==TRUE)message("Calculating Spatial Proximity...")
+  SPtip <- "Spatial Proximity: 'This statistic equals 1.0 if there is no differential racial clustering. It will be greater than one when members of the same racial group tend to live together. When P is less than one, it indicates an unusual form of segregation. Members of a group tend to live closer to members of the other group. One can interpret equation (8) as being an average of the intragroup proximities (P11/Poo and P22/POO), weighted by the fraction of each group in the population.' [3]"
+  
+  xi <- sf::st_drop_geometry(iTableGeo$xi)
+  yi <- sf::st_drop_geometry(iTableGeo$yi)
+  # convert to km2
+  ai <- as.numeric(sf::st_drop_geometry(iTableGeo$area))/1e6
+  gi <- as.numeric(sf::st_drop_geometry(iTableGeo$GEOID))
+  #ti <- sf::st_drop_geometry(iTableGeo$ti)
+  ti <- xi+yi
+  ITG <- data.frame(gi=gi,xi=xi,yi=yi,ai=ai,ti=ti)
+  Tti <- sum(ti)
+  Xxi <- sum(xi)
+  Yyi <- sum(yi)
+
+  Pxx <- 0
+  Pxy <- 0
+  Pyy <- 0
+  Ptt <- 0
+  for(i in 1:n){
+    xi <- as.numeric(ITG[i,"xi"])
+    yi <- as.numeric(ITG[i,"yi"])
+    ti <- as.numeric(ITG[i,"ti"])
+    ai <- as.numeric(ITG[i,"ai"])
+    gi <- as.numeric(ITG[i,"gi"])
+    for(j in 1:n){
+      xj <- as.numeric(ITG[j,"xi"])
+      yj <- as.numeric(ITG[j,"yi"])
+      tj <- as.numeric(ITG[j,"ti"])
+      aj <- as.numeric(ITG[j,"ai"])
+      gj <- as.numeric(ITG[j,"gi"])
+
+  #    if(gi!=gj){
+        dij <- (.6*(ai))^.5
+        cij <- exp(dij*-1)
+
+        Pxxe <- xi*xi*cij
+        Pxye <- xi*yi*cij
+        #Pxxe <- (xi*xj*cij)/(Xxi^2)
+        #Pxye <- (xi*yj*cij)/(Xxi*Yyi)
+        Pxx <- Pxx+Pxxe
+        Pxy <- Pxy+Pxye
+
+        #Pyye <- (yi*yj*cij)/(Yyi^2)
+        Pyye <- yi*yi*cij
+        Pyy <- Pyy+Pyye
+
+        # Ptte <- (ti*tj*cij)/(Tti^2)
+        Ptte <- (xi+yi)*(xi+yi)*cij
+        Ptt <- Ptt+Ptte
+   #   }
+    }
+  }
+  Pxx <- (1/((Xxi)^2))*Pxx
+  Pxy <- (1/(Xxi*Yyi))*Pxy
+  Pyy <- (1/((Yyi)^2))*Pyy
+  Ptt <- (1/((Xxi+Yyi)^2))*Ptt
+  
+  # cat(Pxx,"\n",Pxy,"\n",Pyy,"\n",Ptt,"\n")
+  
+ # print(((Tti^2)*Ptt))
+ # print(((Xxi)^2)*Pxx)
+ # print((2*(Xxi*Yyi))*Pxy)
+ # print(((Yyi)^2)*Pyy)
+  
+  SP <- ((Xxi*Pxx) + (Yyi*Pyy))/((Xxi+Yyi)*Ptt)
+
+  
+  SMT <- data.frame(Measure = c("Dissimilarity Index (Evenness)",
+                                "Multi-Group Entropy Index (Evenness)",
+                                "Max Metro Log__",
+                                "MGEI Metro Entropy__",
+                                "MGEI Metro Standardized__",
+                                "Interaction (Exposure)",
+                                "Isolation (Exposure)",
+                                "Relative Concentration (Concentration)",
+                                "Absolute Centralization (Centralization)",
+                                "Spatial Proximity (Clustering)",
+                                "Other Measures:",
+                                "Correlation (η2)",
+                                "Delta",
+                                "Absolute Concentration",
+                                "Relative Centralization"
+                                ),
+                    Value = c(round(dsi,4),
+                              round(entropyIndex,4),
+                              round(maxLog,4),
+                              round(MetroEntropy,4),
+                              round(MetroEntropy/maxLog,4),
+                              round(Interaction,4),
+                              round(Isolation,4),
+                              round(RelativeConcentration,4),
+                              round(AbsoluteCentralization,4),
+                              round(SP,4),
+                              "",
+                              round(Correlation,4),
+                              round(Delta,4),
+                              round(AbsoluteConcentration,4),
+                              round(RelativeCentralization,4)),
+                    Range = c("0.0 - 1.0",
+                              "0.0 - 1.0",
+                              "log(Ngroups)",
+                              "0 - log(nGroups)",
+                              "0.0 - 1.0",
+                              "0.0 - 1.0",
+                              "0.0 - 1.0",
+                              "0.0 - 1.0",
+                              "-1.0 - 1.0",
+                              "-1.0 - 1.0",
+                              "",
+                              "0.0 - 1.0",
+                              "0.0 - 1.0",
+                              "0.0 - 1.0",
+                              "-1.0 - 1.0"),
+                    SegregationValue = c("1.0",
+                                         "1.0",
+                                         "NA",
+                                         "0 = no diversity",
+                                         "0 = no diversity",
+                                         "0",
+                                         "1",
+                                         "1.0 min. concentration high",
+                                         " + = centralization; - = outlying",
+                                         " >1 min. clustering",
+                                         "",
+                                         "",
+                                         "1.0",
+                                         "1.0",
+                                         "1.0 min. more centralized relative"
+                      
+                    ))
+  
+  if(tips==T){
+    cat(dsiTip,"\n\n",
+        entropyIndexTip,"\n\n",
+        InteractionTip,"\n\n",
+        IsolationTip,"\n\n",
+        RelativeConcentrationTip,"\n\n",
+        AbsoluteCentralizationTip,"\n\n",
+        SPtip,"\n\n",
+        "Other Measures: \n\n",
+        CorrelationTip,"\n\n",
+        DeltaTip,"\n\n",
+        AbsoluteConcentrationTip,"\n\n",
+        RelativeCentralizationTip,"\n\n",
+        "[1] Quotations and calculations from https://www.census.gov/topics/housing/housing-patterns/guidance/appendix-b.html.","\n\n",
+        "[2] Calculations based on https://www2.census.gov/programs-surveys/demo/about/housing-patterns/multigroup_entropy.pdf.\n\n",
+        "[3] White, Michael J. 'The Measurement of Spatial Segregation.' American Journal of Sociology 88, no. 5 (1983): 1008–18. http://www.jstor.org/stable/2779449.")
+  }
+  
+  print(SMT)
 }
 
 # set_api_key----------------------
@@ -2567,6 +3264,9 @@ varInputCheck <- function(tableID = NULL,
   return(list(tableID = tableID, variables = variables, variableSummary = variableSummary))
 }
 
+dummy <- function(x){
+  print(sys.calls())
+}
 # Defunct Functions -------------
 
 # # checkSave-------------------------

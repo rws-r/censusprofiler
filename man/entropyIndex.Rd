@@ -6,9 +6,9 @@
 \usage{
 entropyIndex(
   data = NULL,
-  dataType = "long",
-  dissimilarityValue = NULL,
-  dissimilarityValueB = NULL,
+  dataFormat = "long",
+  majorityVar = NULL,
+  minorityVar = NULL,
   geography = "tract",
   wideCols = NULL,
   longCol = "pct",
@@ -28,19 +28,40 @@ entropyIndex(
   dataset_sub = "acs5",
   dataset_last = NULL,
   censusVars = NULL,
+  geosObject = NULL,
+  verbose = FALSE
+)
+
+entropyIndex(
+  data = NULL,
+  dataFormat = "long",
+  majorityVar = NULL,
+  minorityVar = NULL,
+  geography = "tract",
+  wideCols = NULL,
+  longCol = "pct",
+  filterSummary = FALSE,
+  filterSummaryLevels = "root",
+  tableID = NULL,
+  variables = NULL,
+  filterAddress = NULL,
+  filterRadius = NULL,
+  state = NULL,
+  county = NULL,
+  tract = NULL,
+  block_group = NULL,
+  year = NULL,
+  return = FALSE,
+  dataset_main = "acs",
+  dataset_sub = "acs5",
+  dataset_last = NULL,
+  censusVars = NULL,
+  geosObject = NULL,
   verbose = FALSE
 )
 }
 \arguments{
 \item{data}{A data object for which to estimate entropy.}
-
-\item{dataType}{Can choose "long", "wide" or "vector" depending on data object type.}
-
-\item{dissimilarityValue}{For dissimilarity index, selecting minority group.
-Numeric value corresponding to variable.}
-
-\item{dissimilarityValueB}{For exposure/isolation index, selecting minority
-group. Numeric value corresponding to variable.}
 
 \item{geography}{Defaults to "tract," but must match data object.}
 
@@ -78,14 +99,28 @@ group. Numeric value corresponding to variable.}
 
 \item{dataset_last}{Selection parameters for get_census_variables (e.g. "cprofile")}
 
-\item{censusVars}{Passthrough object to bypass get_census_variables #'}
+\item{censusVars}{Passthrough object to bypass get_census_variables}
+
+\item{geosObject}{Passthrough object to bypass get_geocode_radius}
 
 \item{verbose}{Logical parameter to specify whether to produce verbose output.}
+
+\item{dataType}{Can choose "long", "wide" or "vector" depending on data object type.}
+
+\item{dissimilarityValue}{For dissimilarity index, selecting minority group.
+Numeric value corresponding to variable.}
+
+\item{dissimilarityValueB}{For exposure/isolation index, selecting minority
+group. Numeric value corresponding to variable.}
 }
 \value{
 dataframe
+
+dataframe
 }
 \description{
+A statistical function to estimate diversity / segregation in datasets.
+
 A statistical function to estimate diversity / segregation in datasets.
 }
 \details{
@@ -105,6 +140,10 @@ throughout the larger area. If the metro MGEI was higher, it would signify
 more segregation between diverse areas.
 }
 \examples{
+\dontrun{
+entropyIndex(data=NULL,tableID = "B11012",variables =
+c(1:4),year=2022,verbose=TRUE,filterAddress = v,filterRadius = 1)
+}
 \dontrun{
 entropyIndex(data=NULL,tableID = "B11012",variables =
 c(1:4),year=2022,verbose=TRUE,filterAddress = v,filterRadius = 1)
