@@ -227,14 +227,20 @@ mapper <- function(mapDF=NULL,
   if(!is.null(mapDF)){
     if(verbose==TRUE)message("- mapper | MapDF included. Processing mapDF...")
       ## Get GGR or set GGR variables for regions.
+    if(verbose==TRUE)message("- mapper | Getting ggr...")
     if(type_data(mapDF,return = FALSE) == 5){
       # If profile object is given, supply correct data.
-      ggr <- get_geocode_radius(filterAddress=mapDF$info$address,
-                                filterRadius=mapDF$info$radius,
-                                geography = geography,
-                                coords = mapDF$info$coordinates,
-                                geosObject = geosObject,
-                                verbose = verbose)
+      if(!is.null(mapDF$info)){
+        if(verbose==TRUE)message("- mapper | ggr found in mapDF$info...")
+        ggr <- mapDF$info
+      }else{
+        ggr <- get_geocode_radius(filterAddress=mapDF$info$address,
+                                  filterRadius=mapDF$info$radius,
+                                  geography = geography,
+                                  coords = mapDF$info$coordinates,
+                                  geosObject = geosObject,
+                                  verbose = verbose)
+      }
       mapDF <- mapDF$data$type1data
     }else{
       if(type_data(mapDF,return = FALSE) != 1){
@@ -244,6 +250,7 @@ mapper <- function(mapDF=NULL,
 
     ## Filter out all but relevant variable.
     if(!is.null(variable)){
+      if(verbose==TRUE)message("- mapper | Filtering variables...")
       if(is.numeric(variable)){
         var <- varInputCheck(tableID = tableID, variables = variable)
         variable <- var$variables
@@ -325,7 +332,18 @@ mapper <- function(mapDF=NULL,
   }else{
     ## If our mapDF is for an areaOnly or radiusOnly call, use the supplied
     ## ggr$df object, rather than mapDF.
-    mapDF <- ggr$df
+    if(!is.null(ggr$df)){
+      if(verbose==TRUE)message("- mapper | Using ggr$df...")
+      mapDF <- ggr$df
+    }else{
+      if(verbose==TRUE)message("- mapper | Getting and setting mapDF via spatial_helper()...")
+      mapDF <- spatial_helper(df=mapDF,
+                              geography=geography,
+                              state=state,
+                              county=county,
+                              geosObject = geosObject,
+                              verbose=verbose)
+    }
   }
 # Prepare data ------------------------------------------------------------
     if(radiusOnly==FALSE & areaOnly==FALSE){ 
@@ -365,13 +383,13 @@ mapper <- function(mapDF=NULL,
     }
   }
 
-  if(verbose==TRUE)message(paste(dur(st),"Preparing centroids..."))
+  if(verbose==TRUE)message(" - mapper | Preparing centroids...")
   mapDF <- mapDF %>% mutate(centroid = st_centroid(mapDF$geometry))
   dfC <- mapDF %>% mutate(coord=st_coordinates(mapDF$centroid))
   dfC <- st_as_sf(dfC)
   
   if(radiusOnly==FALSE & areaOnly==FALSE){
-    if(verbose==TRUE)message(paste(dur(st),"Generating map label..."))
+    if(verbose==TRUE)message(" - mapper | Generating map label...")
     if(is.null(LegendTitle)){
       dfLab <- unique(sf::st_drop_geometry(mapDF) %>% filter(variable==variable) %>% select(labels))
       dfLab <- dfLab$labels
@@ -452,7 +470,7 @@ mapper <- function(mapDF=NULL,
                    verbose=verbose)
     return(x)
   }else{
-    if(verbose==TRUE)message(paste(dur(st),"Working with data map..."))
+    if(verbose==TRUE)message(" - mapper | Working with data map...")
     x <- build_map(mapDF=mapDF,
                    filterAddress=filterAddress,
                    ggrObject=ggr,
