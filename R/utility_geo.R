@@ -100,7 +100,7 @@ build_map <- function(mapDF=NULL,
     tmode <- "view"
   }
   
-  if(verbose==TRUE)message(paste(dur(st),"Crafting map..."))
+  if(verbose==TRUE)message(" - build_map() | Crafting map...")
   
   map <- tmap::tm_basemap(server=providers$Stadia.StamenTonerLite) +
     tmap::tm_shape(mapDF,unit="mi") +
@@ -142,7 +142,7 @@ build_map <- function(mapDF=NULL,
     }} +
     tmap::tmap_mode(tmode)
   
-  if(verbose==TRUE)message(paste(dur(st),"Returning map..."))
+  if(verbose==TRUE)message(" - build_map() | Returning map...")
   return(map)
 }  
 
@@ -196,24 +196,30 @@ geo_marker_builder <- function(obj=NULL,
   }
   
   if(is.null(obj)){
-    if(verbose==TRUE)message("Creating bounding box...")
+    if(verbose==TRUE)message(" - geo_marker_builder() | Creating bounding box...")
     if(!is.null(ggrObject$df$geometry)){
       polys <- st_union(ggrObject$df$geometry)
       bbox <- st_bbox(polys)
     }else if(!is.null(ggrObject$buffer)){
-      bbox <- ggrObject$buffer
+      bbox <- st_bbox(ggrObject$buffer)
     }else{
       stop("Error in geo_marker_builder. No valid ggrObject supplied.")
     }
-    
     markerObject <- list()
     
     if(dispRoads==TRUE && geo_resolution>=1){
-      if(verbose==TRUE)message(paste("Fetching tigris::roads via geo_road_helper()..."))
+      if(verbose==TRUE)message(" - geo_marker_builder() | Fetching tigris::roads via geo_road_helper()...")
       if(geo_resolution==1){
-        roads <- tigris::primary_secondary_roads(state=ggrObject$states,filter_by = bbox,refresh=TRUE)
+        roads <- tigris::primary_secondary_roads(state=ggrObject$states,
+                                                 filter_by = bbox,
+                                                 refresh=TRUE)
       }else{
-        roads <- tigris::roads(state=ggrObject$states,county = ggrObject$counties,year=year,filter_by=bbox,refresh=TRUE)
+
+        roads <- tigris::roads(state=ggrObject$states,
+                               county = ggrObject$counties,
+                               year=year,
+                               filter_by=bbox,
+                               refresh=TRUE)
         roads <- geo_road_helper(roads)
         ## Allow for filtering based on road_resolution
         roads <- roads %>% mutate(filter = ifelse(RTTYP %in% c("C","I","O","S","U") |
@@ -223,17 +229,17 @@ geo_marker_builder <- function(obj=NULL,
       markerObject <- append(markerObject,list(roads = roads))
     }
     if(dispWater==TRUE && geo_resolution>=1){
-      if(verbose==TRUE)message(paste("Fetching tigris::water..."))
+      if(verbose==TRUE)message(" - geo_marker_builder() | Fetching tigris::water...")
       water <- tigris::area_water(state=ggrObject$states,county = ggrObject$counties,year=2021,filter_by=bbox,refresh=TRUE)
       markerObject <- append(markerObject,list(water = water))
     }
     if(dispPlaces==TRUE && geo_resolution>=1){
-      if(verbose==TRUE)message(paste("Fetching tigris::places..."))
+      if(verbose==TRUE)message(" - geo_marker_builder() | Fetching tigris::places...")
       places <- tigris::places(state=ggrObject$states,year=year,filter_by=bbox,refresh=TRUE)
       markerObject <- append(markerObject,list(places = places))
     }
     if(dispRails==TRUE && geo_resolution>=1){
-      if(verbose==TRUE)message(paste("Fetching tigris::rails..."))
+      if(verbose==TRUE)message(" - geo_marker_builder() | Fetching tigris::rails...")
       rails <- tigris::rails(year=year,filter_by=bbox,refresh=TRUE)
       markerObject <- append(markerObject,list(rails = rails))
     }
@@ -245,6 +251,7 @@ geo_marker_builder <- function(obj=NULL,
     if(dispRails==TRUE)prms <- c(prms,"rails")
     markerObject <- obj[prms]
   }
+
   return(markerObject)
 }
 
@@ -374,17 +381,45 @@ geo_var_builder <- function(geography=c("all"),
   
   # Check if geospatial data for various geographies exists.
   ## Did I pass geos? If not, find them.
-  if(!is.null(geosObject) || exists("geos",inherits=TRUE)){
-    if(!is.null(geosObject)){
+  if(!is.null(geosObject)){
       if(verbose==TRUE)message("    -gvb--Found geos passthrough....")
       geoDF <- geosObject
       local <- TRUE
-    }else{
-      if(verbose==TRUE)message("    -gvb--Found geos in global env....")
-      geoDF <- get("geos", envir = .GlobalEnv)
-      # geoDF <- "USEENV" ## Flag to read directly from memory
-      local <- TRUE
-    }
+      
+    # Check to see if passthrough object contains geography. If not, request it.
+      if("block group" %in% geography){
+        if(is.null(geoDF$geo_blocks)){
+          message("!> geo_var_builder() | No block groups provided. Trying a download.")
+          gb <- block_groups(cb=TRUE,state = state,county = county)
+          gb <- gb %>% sf::st_transform('+proj=longlat +datum=WGS84')
+          geoDF <- append(geoDF,list(geo_blocks = gb))
+        }
+      }
+      if("tract" %in% geography){
+        if(is.null(geoDF$tracts)){
+          message("!> geo_var_builder() | No tracts groups provided. Trying a download.")
+          gt <- tracts(cb=TRUE,state = state,county = county)
+          gt <- gt %>% sf::st_transform('+proj=longlat +datum=WGS84')
+          geoDF <- append(geoDF,list(geo_blocks = gt))
+        }
+      }
+      if("county" %in% geography){
+        if(is.null(geoDF$tracts)){
+          message("!> geo_var_builder() | No county groups provided. Trying a download.")
+          gc <- counties(cb=TRUE,state = state)
+          gc <- gc %>% sf::st_transform('+proj=longlat +datum=WGS84')
+          geoDF <- append(geoDF,list(geo_blocks = gc))
+        }
+      }
+      if("state" %in% geography){
+        if(is.null(geoDF$tracts)){
+          message("!> geo_var_builder() | No state groups provided. Trying a download.")
+          gs <- states(cb=TRUE)
+          gs <- gs %>% sf::st_transform('+proj=longlat +datum=WGS84')
+          geoDF <- append(geoDF,list(geo_blocks = gs))
+        }
+      }
+  
     # Perform filtering for a call that just needs specific data.
     #TODO Need to adapt this to capture FIPS codes only. 
     if(!is.null(state)){
@@ -1001,7 +1036,7 @@ get_geocode_radius <- function(filterAddress=NULL,
   if(!is.null(geosObject$geo_states))geo_states <- geosObject$geo_states
   if(!is.null(geosObject$geo_counties))geo_counties <- geosObject$geo_counties
   if(!is.null(geosObject$geo_tracts))geo_tracts <- geosObject$geo_tracts
-  if(!is.null(geosObject$geo_blocks))geo_blocks <- geosObject$geo_blocks    
+  if(!is.null(geosObject$geo_blocks))geo_blocks <- geosObject$geo_blocks 
   
   ## Check for class mismatches.
   if(!is.null(state)){
@@ -1090,9 +1125,10 @@ get_geocode_radius <- function(filterAddress=NULL,
     # TODO Fix this to allow for state/county overlap of geo area. See fix above.
     message(paste(dur(st),"Finding geos by supplied geo object..."))
     if(is.null(filterByGeoValue)){
-      stop("Error in filterByGeoType: must supply value for filtering.")
+      stop("get_geocode_radius() | Error in filterByGeoType: must supply value for filtering.")
     }
     if(filterByGeoType %in% c("urban","urban_areas","urban areas")){
+      ##TODO Update this to use the logic of "places" below
       geofilterset <- tigris::urban_areas(year=year)
       gname <- geofilterset %>% filter(NAME10==filterByGeoValue)
       # If first match fails, try fuzzy matching. This may result in multiple matches.
@@ -1100,14 +1136,38 @@ get_geocode_radius <- function(filterAddress=NULL,
       if(nrow(gname)==0)ggeoid <- geofilterset %>% filter(grepl(filterByGeoValue,GEOID10,ignore.case=TRUE))
     }else if(filterByGeoType %in% c("place","places")){
       if(is.null(state)){
-        stop("Sorry, to select places designation, you have to provide a state value.")
+        stop("get_geocode_radius() | Sorry, to select places designation, you have to provide a state value.")
       }
       geofilterset <- tigris::places(year=year,state=state)
-      gname <- geofilterset %>% filter(NAME==filterByGeoValue)
-      # If first match fails, try fuzzy matching. This may result in multiple matches.
-      # if(nrow(gname)==0)gname <- geofilterset %>% filter(grepl(filterByGeoValue,NAME,ignore.case=TRUE))
-      if(nrow(gname)==0)ggeoid <- geofilterset %>% filter(grepl(filterByGeoValue,GEOID,ignore.case=TRUE))
+      gname <- geofilterset %>% dplyr::filter(NAME==filterByGeoValue)
+      # If first match fails, try GEOID
+      if(nrow(gname)==0) ggeoid <- geofilterset %>% dplyr::filter(GEOID==filterByGeoValue)
+      # If second match fails, try PLACEFP
+      if(nrow(gname)==0)gplacefp <- geofilterset %>% dplyr::filter(PLACEFP==filterByGeoValue)
+      # If third match fails, try fuzzy matching. This may result in multiple matches.
+      if(nrow(gname)==0)gfuzzy <- geofilterset %>% dplyr::filter(grepl(filterByGeoValue,GEOID,ignore.case=TRUE))
+      
+      if(nrow(gname)>0){
+        if(nrow(gname)>1){
+          stop("Multiple matches. Please try again with GEOID for greater specificity.")
+        }else{
+          geofiltered <- gname
+          if(verbose==T)message("get_geocode_radius() | Matched place by name.") 
+        }
+      }else if(nrow(ggeoid)>0){
+        geofiltered <- ggeoid
+        if(verbose==T)message("get_geocode_radius() | Matched place by GEOID")
+      }else if(nrow(gplacefp)>0){
+        geofiltered <- gplacefp
+        if(verbose==T)message("get_geocode_radius() | Matched place by PLACEFP")
+      }else if(nrow(gfuzzy)>0){
+        geofiltered <- gfuzzy
+        if(verbose==T)message("get_geocode_radius() | Matched place by fuzzy match.")
+      }else{
+        stop("get_geocode_radius() | No matches found for supplied place in filterByGeo. Please check values and try again.")
+      }
     }else if(filterByGeoType %in% c("combined statistical areas","combined_statistical_areas","csa")){
+      ##TODO Update this to use the logic of "places" above
       ## There's a problem with tigris::combined... For year 2022. Hence the manual adj.
       geofilterset <- tigris::combined_statistical_areas(year=2021)
       gname <- geofilterset %>% filter(NAME==filterByGeoValue)
@@ -1118,17 +1178,6 @@ get_geocode_radius <- function(filterAddress=NULL,
       stop("Invalid filterByGeoType selection. Currently accepting 'metro', 'place','combined_statistical_areas'.")
     }
     
-    if(nrow(gname)>0){
-      if(nrow(gname)>1){
-        stop("Multiple matches. Please try again with GEOID for greater specificity.")
-      }
-      geofiltered <- gname
-    }else if(nrow(ggeoid)>0){
-      geofiltered <- ggeoid
-    }else{
-      stop("No matches for filterByGeo.")
-    }
-    
     buffer <- geofiltered$geometry
     buffer <- buffer %>% sf::st_transform('+proj=longlat +datum=WGS84')
     
@@ -1136,14 +1185,13 @@ get_geocode_radius <- function(filterAddress=NULL,
     
     st <- Sys.time()
     ## Get state from filterAddress / coords
-    statefp <- sf::st_filter(geo_states, buffer, .predicate = sf::st_intersects)$STATEFP
+    statefp <- sf::st_filter(geo_states, buffer, .predicate = sf::st_intersects)
     if(geography=="state"){
       countyfp <- NULL
     }else{
       geo_counties <- geo_counties %>% filter(STATEFP %in% statefp)
-      countyfp <- sf::st_filter(geo_counties, buffer, .predicate = sf::st_intersects)$COUNTYFP
+      countyfp <- sf::st_filter(geo_counties, buffer, .predicate = sf::st_intersects)
     }
-    
   }else{
     buffer <- NULL
     if(!is.null(state)){
@@ -1564,8 +1612,8 @@ spatial_helper <- function(df,
   #   stop("spatial_helper() requires type 3 data.")
   # }
 
-  if(type_data(df,return = FALSE) != 1){
-    stop("spatial_helper() requires type 1 data.")
+  if(type_data(df,return = FALSE) > 4){
+    stop("spatial_helper() requires type 1-4 data.")
   }
 
   ## TODO Clean this up to cohere with geo_var_builder logic
