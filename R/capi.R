@@ -437,9 +437,12 @@ capi <- function(year=NULL,
         tract <- "*" # > Filtering happens after the data call to simplify the call itself.
         #tract <- stringr::str_flatten(unique(ggr$tracts),collapse=",")
       }else if(geography=="block group"){
-      state <- stringr::str_flatten(unique(ggr$states),collapse=",")
-      county <- stringr::str_flatten(unique(ggr$counties),collapse=",")
-      tract <- stringr::str_flatten(unique(ggr$tracts),collapse=",")
+      # state <- stringr::str_flatten(unique(ggr$states),collapse=",")
+      # county <- stringr::str_flatten(unique(ggr$counties),collapse=",")
+      # tract <- stringr::str_flatten(unique(ggr$tracts),collapse=",")
+      # Keep unflattened for tract call, due to loops.
+      county <- ggr$counties
+      tract <- "*" # > Filtering happens after the data call to simplify the call itself.
       if(length(ggr$tracts>1)){
         block_group <- "*"
       }else{
@@ -750,14 +753,14 @@ capi <- function(year=NULL,
             ungroup()
           data_type_3 <- data_type_3 %>% 
             group_by(table_id) %>% 
-            mutate(subtotals=if(any(calculation=="mean"))NA
+            mutate(subtotal=if(any(calculation=="mean"))NA
                              else(max(estimate)),
-                   pct = estimate/subtotals,
+                   pct = estimate/subtotal,
                    pct_by_type = estimate/subtotal_by_type,
                    dt=3) %>% 
             ungroup()
           
-          data_type_3 <- data_type_3 %>% relocate(estimate,subtotals, pct,subtotal_by_type,pct_by_type, .after=labels)
+          data_type_3 <- data_type_3 %>% relocate(estimate,subtotal, pct,subtotal_by_type,pct_by_type, .after=labels)
           attr(data_type_3,"dataType") <- 3
 
         if(filterSummary==TRUE || profile==TRUE){
