@@ -1676,8 +1676,9 @@ segregationMeasures <- function(data=NULL,
   }
   ### Init 
   if(!is.null(tableID) || !is.null(variables)){
-    viC <- varInputCheck(tableID=tableID,variables=variables)
-    variables <- viC$variables
+    viC <- varInputCheck(tableID=tableID,variables=c(majorityVar,minorityVar))
+    majorityVar <- viC$variables[1]
+    minorityVar <- viC$variables[2]
   }
   
   ## Create data object if does not exist
