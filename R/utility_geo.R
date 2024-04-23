@@ -979,7 +979,7 @@ get_geocode_radius <- function(filterAddress=NULL,
 ){
   ## Deal with "no visible binding for global variable" error 
   feet <- STATEFP <- STUSPS <- NAME <- NAME10 <- COUNTYFP <- GEOID <- 
-    GEOID10 <- intersectedArea <- unitArea <- intersectionProp <- 
+    PLACEFP <- GEOID10 <- intersectedArea <- unitArea <- intersectionProp <- 
     NAMELSAD <- geometry <- NULL
   
   if(is.null(geography)){

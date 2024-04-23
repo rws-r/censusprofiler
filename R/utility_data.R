@@ -292,377 +292,6 @@ dur <- function(st){
   return(x)
 }
 
-# entropyIdex -------------------------
-#' Entropy Index 
-#' 
-#' A statistical function to estimate diversity / segregation in datasets.
-#'
-#'Logic developed from
-#'https://www2.census.gov/programs-surveys/demo/about/housing-patterns/multigroup_entropy.pdf
-#'and Scientific Study of Religion - 2016 - Dougherty - Congregational Diversity
-#'and Attendance in a Mainline Protestant-2024-02-19-13-18.pdf OR
-#'https://onlinelibrary.wiley.com/doi/epdf/10.1111/j.1468-5906.2008.00390.x."EI"
-#'is built from the second, while MGEI is built from the former. Basically, the
-#'EI signifies how much diversity exists in a community (e.g., Census Tract).
-#'The Multigroup index of the whole metro area examines how much segregation
-#'exist between areas in a larger area. It doesn't account for the diversity of
-#'the whole, but the integration of the areas. So for example, Individual census
-#'tracts may have a high entropy score (0.8), signifying lots of diversity. But
-#'it may have a low metro score (.05) suggesting that diversity is evenly spread
-#'throughout the larger area. If the metro MGEI was higher, it would signify
-#'more segregation between diverse areas.
-#'
-#' @param data A data object for which to estimate entropy. 
-#' @param dataType Can choose "long", "wide" or "vector" depending on data object type.
-#' @param geography Defaults to "tract," but must match data object.
-#' @param wideCols Specified columns for calculating entropy in wide data.
-#' @param longCol Specified columns for calculating entropy in long data.
-#' @param tableID TableID specification for calculating entropy.
-#' @param variables Variable specification for calculating entropy.
-#' @param dissimilarityValue For dissimilarity index, selecting minority group.
-#'   Numeric value corresponding to variable.
-#' @param dissimilarityValueB For exposure/isolation index, selecting minority
-#'   group. Numeric value corresponding to variable.
-#' @param filterAddress For data calls, a filtered area specification.
-#' @param filterRadius For data calls, a filtered area specification.
-#' @param state Input (abb. or FIPS) of state for search.
-#' @param county Input (abb. or FIPS) of county for search.
-#' @param tract Input (abb. or FIPS) of tract for search.
-#' @param block_group Input (abb. or FIPS) of block group for search.
-#' @param year Year for data call.
-#' @param filterSummary Logical parameter to specify whether to filter out summary levels (typically _001 and therefore "root").
-#' @param filterSummaryLevels Explicit description of lowest type denoting summary level. Also excludes lower levels.#' 
-#' @param return Logical parameter. If TRUE, return value only. Otherwise return formatted string.
-#' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
-#' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
-#' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
-#' @param censusVars Passthrough object to bypass get_census_variables 
-#' @param geosObject Passthrough object to bypass get_geocode_radius
-#' @param verbose Logical parameter to specify whether to produce verbose output.
-#' 
-#'
-#' @return dataframe
-#' @export
-#' 
-#'
-#' @examples \dontrun{
-#' entropyIndex(data=NULL,tableID = "B11012",variables =
-#' c(1:4),year=2022,verbose=TRUE,filterAddress = v,filterRadius = 1)
-#' }
-entropyIndex <- function(data=NULL,
-                         dataFormat="long", # c("long","wide","vector")
-                         dissimilarityValue=NULL, # for dissimilarity index, selecting minority group
-                         dissimilarityValueB=NULL, # for exposure/isolation index, selecting minority group
-                         geography="tract",
-                         wideCols=NULL,
-                         longCol="pct",
-                         filterSummary=FALSE,
-                         filterSummaryLevels="root", # default
-                         #entropyType="EI", # c("EI","MGEI")
-                         tableID=NULL,
-                         variables=NULL,
-                         filterAddress=NULL,
-                         filterRadius=NULL,
-                         # filterSummaryLevels=NULL, Duplicate in typeFilter
-                         state=NULL,
-                         county=NULL,
-                         tract=NULL,
-                         block_group=NULL,
-                         year=NULL,
-                         return=FALSE,
-                         dataset_main="acs",
-                         dataset_sub="acs5",
-                         dataset_last=NULL,
-                         censusVars=NULL,
-                         geosObject=NULL,
-                         verbose=FALSE){
-  
-  table_id <- variable <- concept <- estimate <- pct <- 
-    pct_by_type <- subtotal <- pct <- name <- geoid <- type <- 
-    est_total <- sub_total <- NULL
-  
-  if(verbose==TRUE)message("Getting CV...")
-  if(is.null(censusVars)){ 
-    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
-  }else{
-    CV <- censusVars
-  }
-  CV.VARS <- CV[[1]]
-  CV.GROUPS <- CV[[2]]
-  
-  if(is.null(tableID)){
-    stop("No tableID supplied. Please try again.")
-  }
-  ### Init 
-  if(!is.null(tableID) || !is.null(variables)){
-    viC <- varInputCheck(tableID=tableID,variables=variables)
-    variables <- viC$variables
-  }
-  
-  ## Create data object if does not exist
-  if(is.null(data)){
-    data <- profiler(year=year,
-                     tableID=tableID,
-                     variables=variables,
-                     geography=geography,
-                     filterAddress=filterAddress,
-                     filterRadius=filterRadius,
-                     filterSummary=filterSummary,
-                     filterSummaryLevels=filterSummaryLevels,
-                     state=state,
-                     county=county,
-                     tract=tract,
-                     block_group=block_group,
-                     censusVars=CV,
-                     geosObject = geosObject,
-                     verbose=verbose)
-  }
-  
-  ## Error Checking
-  if(verbose==TRUE)message("   - EI: error checking...")
-  if(dataFormat=="vector"){
-    if(!is.vector(data)){
-      stop("You have not supplied a vector, per specified dataFormat.")
-    }
-  }else{
-    td <- type_data(data)
-    if(td==5){
-      data <- data$data$type2data
-    }else{
-      if(td!=2 & td!=8){
-        stop("You need to supply type_2_data or profile_summary data.")
-      }
-    }
-  }
-
-  if(!(tableID %in% data$table_id)){
-    stop("That tableID does not exist in the data provided.")
-  }
-
-  ## Data Cleaning and preparation
-  if(verbose==TRUE)message("   - EI: cleaning data...")
-  if(dataFormat!="vector"){
-    if(type_data(data)==2){
-      data <- data %>% ungroup()
-      data <- data[c("table_id","variable","year","concept","labels","estimate","subtotal","pct","name","geoid","geography","type")]
-    }else{
-      if(inherits(data,"sf")==TRUE){
-        data <- sf::st_drop_geometry(data)
-      }
-      data <- data %>% ungroup()
-      data <- data[c("table_id","variable","year","concept","labels","estimate","subtotal","pct","name","type")]
-    }
-    data <- data %>% filter(table_id==tableID)
-    
-    if(!is.null(variables)){
-      data <- data %>% filter(variable %in% variables) 
-    }
-    data <- data %>% filter(!is.na(pct))
-    
-    # Create empty entropy table to populate.
-    entropyTableNames <- c("table_id","year","concept","name","geoid","geography","pct","entropyIndex","multiGroupEntropyIndex")
-    entropyTable <- data.frame(matrix(ncol = length(names(entropyTableNames)),nrow = 0))
-    colnames(entropyTable) <- names(entropyTableNames)
-  }
-  
-  ## Get whole-area entropy estimates / entropy index
-  # Combine populations
-  area <- data %>% dplyr::group_by(labels,variable) %>% dplyr::summarize(est_total = sum(estimate),
-                                                           sub_total = sum(subtotal),
-                                                           areaPct = est_total/sub_total)
-  
-  areaPopulation <- unique(area$sub_total)
-  
-  ### Processing Function with Vectorized Input
-  processEntropy <- function(vector,dissimilarityValue=dissimilarityValue, return=FALSE,verbose=FALSE){
-    # Filter out zeros
-    if(verbose==TRUE)message("   - pE:         dealing with zeroes...")
-    # for(i in 1:length(vector)){
-    #   if(vector[i]<0.0001){
-    #     vector[i] <- 0.0001
-    #   }
-    # }
-    K <- length(vector)
-    maxEntropy <- log(K)
-    if(K==0){
-      return(NA)
-    }else{
-      
-      ## Convert to proportion if whole number
-      if(verbose==TRUE)message("   - pE:         converting to proportion if whole number...")
-      for(b in 1:K){
-        if(vector[b]>1){
-          vector[b] <- vector[b]/100
-        }
-      }
-      
-      H <- 0
-      
-      ## Calculate standardized entropy score.
-      if(verbose==TRUE)message("   - pE:         calculating entropy (ES)...")
-      for(j in 1:K){
-        ifelse(vector[j]==0,
-               s <- vector[j] * 0,
-               s <- vector[j] * log(1/vector[j]))
-        H <- s + H
-      }
-      ES <- round(H,4)
-      SES <- round((ES/maxEntropy),4) ## Return standardized entropy score.
-      
-      if(return==FALSE){
-        cat(paste("Standardized Entropy Index:",SES))
-      }else{
-        return(list(ES=ES,SES=SES))
-      }
-    }
-  }
-
-  ## Run Program 
-  if(verbose==TRUE)message("   - EI: running processEntropy()...")
-  if(dataFormat=="wide"){
-    if(verbose==TRUE)message("   - EI: using wide data...")
-    if(is.null(wideCols)){
-      stop("Please include columns by number or name")
-    }
-    
-  }else if(dataFormat=="long"){
-    if(verbose==TRUE)message("   - EI: using long data...")
-    # Get reference variables
-    if(is.null(tableID)){
-      if(verbose==TRUE)message("   - EI: generating unique tableID values...")
-      tableID <- unique(data$table_id)
-    }
-    
-    #Loop by table_id
-    if(verbose==TRUE)message("   - EI: looping through tableIDs...")
-    for(ti in 1:length(tableID)){
-      if(verbose==TRUE)message(paste("   - EI:    it #",ti))
-      if(verbose==TRUE)message(paste("   - EI:    filtering by table_id..."))
-      df <- data %>% filter(table_id==tableID[ti])
-      if(geography=="metro" || geography=="msa"){
-        gid <- 1
-      }else{
-        gid <- unique(df$geoid)
-        DI <- 0
-        EXI <- 0
-        II <- 0
-        for(g in 1:length(gid)){
-          if(verbose==TRUE)message(paste("   - EI:       looping through geoids; it #",g))
-          if(verbose==TRUE)message(paste("   - EI:       filtering by geoid..."))
-          d <- df %>% filter(geoid==gid[g])
-          
-          if(verbose==TRUE)message(paste("   - EI:       building vector..."))
-          vector <- d[[longCol]]
-          
-          maxEntropy <- log(length(vector))
-          
-          if(verbose==TRUE)message(paste("   - EI:       running processEntropy()..."))
-          ESLIST <- processEntropy(vector,return=TRUE,verbose=verbose)
-          SES <- ESLIST$SES
-          ES <- ESLIST$ES
-          
-          ## Dissimilarity Index
-          if(!is.null(dissimilarityValue)){
-            if(is.numeric(dissimilarityValue)){
-              dv <- paste(tableID,"_",sprintf("%03d",dissimilarityValue),sep="")
-            }else{
-              dv <- dissimilarityValue
-            }
-            dvd <- d %>% filter(variable==dv)
-            ti <- dvd$estimate
-            pi <- dvd$pct
-            To <- areaPopulation
-            ad <- area %>% filter(variable==dv)
-            P <- ad$areaPct
-            
-            dsi <- (ti * abs(pi-P)) / (2*To*P*(1-P))
-            DI <- DI+dsi
-          }else{
-            DI <- NULL
-          }
-          
-          ## Exposure / Isolation Index
-          if(!is.null(dissimilarityValueB)){
-            if(is.numeric(dissimilarityValueB)){
-              dvb <- paste(tableID,"_",sprintf("%03d",dissimilarityValueB),sep="")
-            }else{
-              dvb <- dissimilarityValueB
-            }
-            eidA <- d %>% filter(variable==dv)
-            eidB <- d %>% filter(variable==dvb)
-            xi <- eidA$estimate
-            yi <- eidB$estimate
-            ti <- eidA$subtotal
-            To <- areaPopulation
-            aeid <- area %>% filter(variable==dv)
-            X <- aeid$est_total
-            
-            exv <- (xi/X)*(yi/ti)
-            EXI <- EXI+exv
-            iiv <- (xi/X)*(xi/ti)
-            II <- II+iiv
-            
-          }else{
-            EXI <- NULL
-            II <- NULL
-          }
-          
-          # Remove pct col and get summary row
-          d <- d %>% select(table_id,year,concept,name,geoid,geography,subtotal)
-          d <- unique(d)
-          d <- d %>% mutate(maxEntropy = maxEntropy, entropyScore = ES, standardizedEntropyScore = SES)
-          entropyTable <- rbind(entropyTable,d)
-        }
-      }
-    }
-    
-    areaVector <- area[["areaPct"]]
-    AESLIST <- processEntropy(areaVector,return=TRUE,verbose=verbose)
-    AES <- AESLIST$ES
-    ASES <- AESLIST$SES
-    
-    ## Develop entropy index (weighted average deviation of each unit's entropy from the 
-    ## metropolitan-wide entropy, expressed as a fraction of the metropolitan area's total
-    ## entropy.) "The entropy index varies between 0, when all areas have the same
-    ## composition as the entire metropolitan area (i.e., maximum integration), to a high of 1,
-    ## when all areas contain one group only (maximum segregation). While the diversity score is 
-    ## influenced by the relative size of the various groups in a metropolitan area, 
-    ## the entropy index, being a measure of evenness, is not. Rather, it measures how evenly 
-    ## groups are distributed across metropolitan area neighborhoods, regardless of the 
-    ## size of each of the groups." (Iceland, p. 8)
-    
-    EI <- 0
-    for(et in 1:nrow(entropyTable)){
-      t <- entropyTable[[et,"subtotal"]]
-      Ei <- entropyTable[[et,"entropyScore"]]
-      To <- areaPopulation
-      #print(paste(t,"(",AES,"-",Ei,") / (",AES,"*",To,")"))
-      h <- (t * (AES-Ei)) / (AES*To)
-      EI <- EI+h
-    }
-    
-    entropyBundle <- list(UnitEntropyScore = entropyTable,
-                          MaxEntropy = maxEntropy,
-                          AreaSummary = area,
-                          AreaEntropyScore = AES,
-                          AreaStandardizedEntropyScore = ASES,
-                          AreaEntropyIndex = EI)
-    
-    if(!is.null(dissimilarityValue)){
-      entropyBundle <- append(entropyBundle,list(DissimilarityIndex = DI))
-    }
-    if(!is.null(dissimilarityValueB)){
-      entropyBundle <- append(entropyBundle,list(ExposureIndex = EXI,
-                                                 IsolationIndex = II))
-    }
-    
-    
-    return(entropyBundle)
-  }else{
-    processEntropy(data,return=TRUE,verbose=verbose)
-  }
-}
-
 # get_census_variables-------------------------------
 
 #' Get Census Variables
@@ -1588,15 +1217,15 @@ pseudo_tableID <- function(vars,
 #'
 #'
 #' @param data A data object for which to estimate entropy. 
-#' @param dataType Can choose "long", "wide" or "vector" depending on data object type.
+#' @param dataFormat Can choose "long", "wide" or "vector" depending on data object type.
 #' @param geography Defaults to "tract," but must match data object.
 #' @param wideCols Specified columns for calculating entropy in wide data.
 #' @param longCol Specified columns for calculating entropy in long data.
 #' @param tableID TableID specification for calculating entropy.
 #' @param variables Variable specification for calculating entropy.
-#' @param dissimilarityValue For dissimilarity index, selecting minority group.
+#' @param majorityVar For dissimilarity index, selecting minority group.
 #'   Numeric value corresponding to variable.
-#' @param dissimilarityValueB For exposure/isolation index, selecting minority
+#' @param minorityVar For exposure/isolation index, selecting minority
 #'   group. Numeric value corresponding to variable.
 #' @param filterAddress For data calls, a filtered area specification.
 #' @param filterRadius For data calls, a filtered area specification.
@@ -1654,7 +1283,8 @@ segregationMeasures <- function(data=NULL,
   
   table_id <- variable <- concept <- estimate <- pct <- 
     pct_by_type <- subtotal <- pct <- name <- geoid <- type <- 
-    est_total <- sub_total <- NULL
+    est_total <- sub_total <- GEOID <- AWATER <- geometry <- 
+    entropyScore <- centroids <- NULL
   
   if(verbose==TRUE)message("segregationMeasures() | Getting CV...")
   if(is.null(censusVars)){ 
@@ -2191,7 +1821,7 @@ segregationMeasures <- function(data=NULL,
                                 "Absolute Centralization (Centralization)",
                                 "Spatial Proximity (Clustering)",
                                 "Other Measures:",
-                                "Correlation (η2)",
+                                "Correlation (eta2)",
                                 "Delta",
                                 "Absolute Concentration",
                                 "Relative Centralization"
@@ -2259,7 +1889,7 @@ segregationMeasures <- function(data=NULL,
         RelativeCentralizationTip,"\n\n",
         "[1] Quotations and calculations from https://www.census.gov/topics/housing/housing-patterns/guidance/appendix-b.html.","\n\n",
         "[2] Calculations based on https://www2.census.gov/programs-surveys/demo/about/housing-patterns/multigroup_entropy.pdf.\n\n",
-        "[3] White, Michael J. 'The Measurement of Spatial Segregation.' American Journal of Sociology 88, no. 5 (1983): 1008–18. http://www.jstor.org/stable/2779449.")
+        "[3] White, Michael J. 'The Measurement of Spatial Segregation.' American Journal of Sociology 88, no. 5 (1983): 1008-18. http://www.jstor.org/stable/2779449.")
   }
   
   print(SMT)
@@ -3304,3 +2934,373 @@ dummy <- function(x){
 #   #stop('Exiting since you did not press y')
 # }
 
+#' # entropyIdex -------------------------
+#' #' Entropy Index 
+#' #' 
+#' #' A statistical function to estimate diversity / segregation in datasets.
+#' #'
+#' #'Logic developed from
+#' #'https://www2.census.gov/programs-surveys/demo/about/housing-patterns/multigroup_entropy.pdf
+#' #'and Scientific Study of Religion - 2016 - Dougherty - Congregational Diversity
+#' #'and Attendance in a Mainline Protestant-2024-02-19-13-18.pdf OR
+#' #'https://onlinelibrary.wiley.com/doi/epdf/10.1111/j.1468-5906.2008.00390.x."EI"
+#' #'is built from the second, while MGEI is built from the former. Basically, the
+#' #'EI signifies how much diversity exists in a community (e.g., Census Tract).
+#' #'The Multigroup index of the whole metro area examines how much segregation
+#' #'exist between areas in a larger area. It doesn't account for the diversity of
+#' #'the whole, but the integration of the areas. So for example, Individual census
+#' #'tracts may have a high entropy score (0.8), signifying lots of diversity. But
+#' #'it may have a low metro score (.05) suggesting that diversity is evenly spread
+#' #'throughout the larger area. If the metro MGEI was higher, it would signify
+#' #'more segregation between diverse areas.
+#' #'
+#' #' @param data A data object for which to estimate entropy. 
+#' #' @param dataType Can choose "long", "wide" or "vector" depending on data object type.
+#' #' @param geography Defaults to "tract," but must match data object.
+#' #' @param wideCols Specified columns for calculating entropy in wide data.
+#' #' @param longCol Specified columns for calculating entropy in long data.
+#' #' @param tableID TableID specification for calculating entropy.
+#' #' @param variables Variable specification for calculating entropy.
+#' #' @param dissimilarityValue For dissimilarity index, selecting minority group.
+#' #'   Numeric value corresponding to variable.
+#' #' @param dissimilarityValueB For exposure/isolation index, selecting minority
+#' #'   group. Numeric value corresponding to variable.
+#' #' @param filterAddress For data calls, a filtered area specification.
+#' #' @param filterRadius For data calls, a filtered area specification.
+#' #' @param state Input (abb. or FIPS) of state for search.
+#' #' @param county Input (abb. or FIPS) of county for search.
+#' #' @param tract Input (abb. or FIPS) of tract for search.
+#' #' @param block_group Input (abb. or FIPS) of block group for search.
+#' #' @param year Year for data call.
+#' #' @param filterSummary Logical parameter to specify whether to filter out summary levels (typically _001 and therefore "root").
+#' #' @param filterSummaryLevels Explicit description of lowest type denoting summary level. Also excludes lower levels.#' 
+#' #' @param return Logical parameter. If TRUE, return value only. Otherwise return formatted string.
+#' #' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
+#' #' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
+#' #' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
+#' #' @param censusVars Passthrough object to bypass get_census_variables 
+#' #' @param geosObject Passthrough object to bypass get_geocode_radius
+#' #' @param verbose Logical parameter to specify whether to produce verbose output.
+#' #' 
+#' #'
+#' #' @return dataframe
+#' #' @export
+#' #' 
+#' #'
+#' #' @examples \dontrun{
+#' #' entropyIndex(data=NULL,tableID = "B11012",variables =
+#' #' c(1:4),year=2022,verbose=TRUE,filterAddress = v,filterRadius = 1)
+#' #' }
+#' entropyIndex <- function(data=NULL,
+#'                          dataFormat="long", # c("long","wide","vector")
+#'                          dissimilarityValue=NULL, # for dissimilarity index, selecting minority group
+#'                          dissimilarityValueB=NULL, # for exposure/isolation index, selecting minority group
+#'                          geography="tract",
+#'                          wideCols=NULL,
+#'                          longCol="pct",
+#'                          filterSummary=FALSE,
+#'                          filterSummaryLevels="root", # default
+#'                          #entropyType="EI", # c("EI","MGEI")
+#'                          tableID=NULL,
+#'                          variables=NULL,
+#'                          filterAddress=NULL,
+#'                          filterRadius=NULL,
+#'                          # filterSummaryLevels=NULL, Duplicate in typeFilter
+#'                          state=NULL,
+#'                          county=NULL,
+#'                          tract=NULL,
+#'                          block_group=NULL,
+#'                          year=NULL,
+#'                          return=FALSE,
+#'                          dataset_main="acs",
+#'                          dataset_sub="acs5",
+#'                          dataset_last=NULL,
+#'                          censusVars=NULL,
+#'                          geosObject=NULL,
+#'                          verbose=FALSE){
+#'   
+#'   table_id <- variable <- concept <- estimate <- pct <- 
+#'     pct_by_type <- subtotal <- pct <- name <- geoid <- type <- 
+#'     est_total <- sub_total <- NULL
+#'   
+#'   if(verbose==TRUE)message("Getting CV...")
+#'   if(is.null(censusVars)){ 
+#'     CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+#'   }else{
+#'     CV <- censusVars
+#'   }
+#'   CV.VARS <- CV[[1]]
+#'   CV.GROUPS <- CV[[2]]
+#'   
+#'   if(is.null(tableID)){
+#'     stop("No tableID supplied. Please try again.")
+#'   }
+#'   ### Init 
+#'   if(!is.null(tableID) || !is.null(variables)){
+#'     viC <- varInputCheck(tableID=tableID,variables=variables)
+#'     variables <- viC$variables
+#'   }
+#'   
+#'   ## Create data object if does not exist
+#'   if(is.null(data)){
+#'     data <- profiler(year=year,
+#'                      tableID=tableID,
+#'                      variables=variables,
+#'                      geography=geography,
+#'                      filterAddress=filterAddress,
+#'                      filterRadius=filterRadius,
+#'                      filterSummary=filterSummary,
+#'                      filterSummaryLevels=filterSummaryLevels,
+#'                      state=state,
+#'                      county=county,
+#'                      tract=tract,
+#'                      block_group=block_group,
+#'                      censusVars=CV,
+#'                      geosObject = geosObject,
+#'                      verbose=verbose)
+#'   }
+#'   
+#'   ## Error Checking
+#'   if(verbose==TRUE)message("   - EI: error checking...")
+#'   if(dataFormat=="vector"){
+#'     if(!is.vector(data)){
+#'       stop("You have not supplied a vector, per specified dataFormat.")
+#'     }
+#'   }else{
+#'     td <- type_data(data)
+#'     if(td==5){
+#'       data <- data$data$type2data
+#'     }else{
+#'       if(td!=2 & td!=8){
+#'         stop("You need to supply type_2_data or profile_summary data.")
+#'       }
+#'     }
+#'   }
+#'   
+#'   if(!(tableID %in% data$table_id)){
+#'     stop("That tableID does not exist in the data provided.")
+#'   }
+#'   
+#'   ## Data Cleaning and preparation
+#'   if(verbose==TRUE)message("   - EI: cleaning data...")
+#'   if(dataFormat!="vector"){
+#'     if(type_data(data)==2){
+#'       data <- data %>% ungroup()
+#'       data <- data[c("table_id","variable","year","concept","labels","estimate","subtotal","pct","name","geoid","geography","type")]
+#'     }else{
+#'       if(inherits(data,"sf")==TRUE){
+#'         data <- sf::st_drop_geometry(data)
+#'       }
+#'       data <- data %>% ungroup()
+#'       data <- data[c("table_id","variable","year","concept","labels","estimate","subtotal","pct","name","type")]
+#'     }
+#'     data <- data %>% filter(table_id==tableID)
+#'     
+#'     if(!is.null(variables)){
+#'       data <- data %>% filter(variable %in% variables) 
+#'     }
+#'     data <- data %>% filter(!is.na(pct))
+#'     
+#'     # Create empty entropy table to populate.
+#'     entropyTableNames <- c("table_id","year","concept","name","geoid","geography","pct","entropyIndex","multiGroupEntropyIndex")
+#'     entropyTable <- data.frame(matrix(ncol = length(names(entropyTableNames)),nrow = 0))
+#'     colnames(entropyTable) <- names(entropyTableNames)
+#'   }
+#'   
+#'   ## Get whole-area entropy estimates / entropy index
+#'   # Combine populations
+#'   area <- data %>% dplyr::group_by(labels,variable) %>% dplyr::summarize(est_total = sum(estimate),
+#'                                                                          sub_total = sum(subtotal),
+#'                                                                          areaPct = est_total/sub_total)
+#'   
+#'   areaPopulation <- unique(area$sub_total)
+#'   
+#'   ### Processing Function with Vectorized Input
+#'   processEntropy <- function(vector,dissimilarityValue=dissimilarityValue, return=FALSE,verbose=FALSE){
+#'     # Filter out zeros
+#'     if(verbose==TRUE)message("   - pE:         dealing with zeroes...")
+#'     # for(i in 1:length(vector)){
+#'     #   if(vector[i]<0.0001){
+#'     #     vector[i] <- 0.0001
+#'     #   }
+#'     # }
+#'     K <- length(vector)
+#'     maxEntropy <- log(K)
+#'     if(K==0){
+#'       return(NA)
+#'     }else{
+#'       
+#'       ## Convert to proportion if whole number
+#'       if(verbose==TRUE)message("   - pE:         converting to proportion if whole number...")
+#'       for(b in 1:K){
+#'         if(vector[b]>1){
+#'           vector[b] <- vector[b]/100
+#'         }
+#'       }
+#'       
+#'       H <- 0
+#'       
+#'       ## Calculate standardized entropy score.
+#'       if(verbose==TRUE)message("   - pE:         calculating entropy (ES)...")
+#'       for(j in 1:K){
+#'         ifelse(vector[j]==0,
+#'                s <- vector[j] * 0,
+#'                s <- vector[j] * log(1/vector[j]))
+#'         H <- s + H
+#'       }
+#'       ES <- round(H,4)
+#'       SES <- round((ES/maxEntropy),4) ## Return standardized entropy score.
+#'       
+#'       if(return==FALSE){
+#'         cat(paste("Standardized Entropy Index:",SES))
+#'       }else{
+#'         return(list(ES=ES,SES=SES))
+#'       }
+#'     }
+#'   }
+#'   
+#'   ## Run Program 
+#'   if(verbose==TRUE)message("   - EI: running processEntropy()...")
+#'   if(dataFormat=="wide"){
+#'     if(verbose==TRUE)message("   - EI: using wide data...")
+#'     if(is.null(wideCols)){
+#'       stop("Please include columns by number or name")
+#'     }
+#'     
+#'   }else if(dataFormat=="long"){
+#'     if(verbose==TRUE)message("   - EI: using long data...")
+#'     # Get reference variables
+#'     if(is.null(tableID)){
+#'       if(verbose==TRUE)message("   - EI: generating unique tableID values...")
+#'       tableID <- unique(data$table_id)
+#'     }
+#'     
+#'     #Loop by table_id
+#'     if(verbose==TRUE)message("   - EI: looping through tableIDs...")
+#'     for(ti in 1:length(tableID)){
+#'       if(verbose==TRUE)message(paste("   - EI:    it #",ti))
+#'       if(verbose==TRUE)message(paste("   - EI:    filtering by table_id..."))
+#'       df <- data %>% filter(table_id==tableID[ti])
+#'       if(geography=="metro" || geography=="msa"){
+#'         gid <- 1
+#'       }else{
+#'         gid <- unique(df$geoid)
+#'         DI <- 0
+#'         EXI <- 0
+#'         II <- 0
+#'         for(g in 1:length(gid)){
+#'           if(verbose==TRUE)message(paste("   - EI:       looping through geoids; it #",g))
+#'           if(verbose==TRUE)message(paste("   - EI:       filtering by geoid..."))
+#'           d <- df %>% filter(geoid==gid[g])
+#'           
+#'           if(verbose==TRUE)message(paste("   - EI:       building vector..."))
+#'           vector <- d[[longCol]]
+#'           
+#'           maxEntropy <- log(length(vector))
+#'           
+#'           if(verbose==TRUE)message(paste("   - EI:       running processEntropy()..."))
+#'           ESLIST <- processEntropy(vector,return=TRUE,verbose=verbose)
+#'           SES <- ESLIST$SES
+#'           ES <- ESLIST$ES
+#'           
+#'           ## Dissimilarity Index
+#'           if(!is.null(dissimilarityValue)){
+#'             if(is.numeric(dissimilarityValue)){
+#'               dv <- paste(tableID,"_",sprintf("%03d",dissimilarityValue),sep="")
+#'             }else{
+#'               dv <- dissimilarityValue
+#'             }
+#'             dvd <- d %>% filter(variable==dv)
+#'             ti <- dvd$estimate
+#'             pi <- dvd$pct
+#'             To <- areaPopulation
+#'             ad <- area %>% filter(variable==dv)
+#'             P <- ad$areaPct
+#'             
+#'             dsi <- (ti * abs(pi-P)) / (2*To*P*(1-P))
+#'             DI <- DI+dsi
+#'           }else{
+#'             DI <- NULL
+#'           }
+#'           
+#'           ## Exposure / Isolation Index
+#'           if(!is.null(dissimilarityValueB)){
+#'             if(is.numeric(dissimilarityValueB)){
+#'               dvb <- paste(tableID,"_",sprintf("%03d",dissimilarityValueB),sep="")
+#'             }else{
+#'               dvb <- dissimilarityValueB
+#'             }
+#'             eidA <- d %>% filter(variable==dv)
+#'             eidB <- d %>% filter(variable==dvb)
+#'             xi <- eidA$estimate
+#'             yi <- eidB$estimate
+#'             ti <- eidA$subtotal
+#'             To <- areaPopulation
+#'             aeid <- area %>% filter(variable==dv)
+#'             X <- aeid$est_total
+#'             
+#'             exv <- (xi/X)*(yi/ti)
+#'             EXI <- EXI+exv
+#'             iiv <- (xi/X)*(xi/ti)
+#'             II <- II+iiv
+#'             
+#'           }else{
+#'             EXI <- NULL
+#'             II <- NULL
+#'           }
+#'           
+#'           # Remove pct col and get summary row
+#'           d <- d %>% select(table_id,year,concept,name,geoid,geography,subtotal)
+#'           d <- unique(d)
+#'           d <- d %>% mutate(maxEntropy = maxEntropy, entropyScore = ES, standardizedEntropyScore = SES)
+#'           entropyTable <- rbind(entropyTable,d)
+#'         }
+#'       }
+#'     }
+#'     
+#'     areaVector <- area[["areaPct"]]
+#'     AESLIST <- processEntropy(areaVector,return=TRUE,verbose=verbose)
+#'     AES <- AESLIST$ES
+#'     ASES <- AESLIST$SES
+#'     
+#'     ## Develop entropy index (weighted average deviation of each unit's entropy from the 
+#'     ## metropolitan-wide entropy, expressed as a fraction of the metropolitan area's total
+#'     ## entropy.) "The entropy index varies between 0, when all areas have the same
+#'     ## composition as the entire metropolitan area (i.e., maximum integration), to a high of 1,
+#'     ## when all areas contain one group only (maximum segregation). While the diversity score is 
+#'     ## influenced by the relative size of the various groups in a metropolitan area, 
+#'     ## the entropy index, being a measure of evenness, is not. Rather, it measures how evenly 
+#'     ## groups are distributed across metropolitan area neighborhoods, regardless of the 
+#'     ## size of each of the groups." (Iceland, p. 8)
+#'     
+#'     EI <- 0
+#'     for(et in 1:nrow(entropyTable)){
+#'       t <- entropyTable[[et,"subtotal"]]
+#'       Ei <- entropyTable[[et,"entropyScore"]]
+#'       To <- areaPopulation
+#'       #print(paste(t,"(",AES,"-",Ei,") / (",AES,"*",To,")"))
+#'       h <- (t * (AES-Ei)) / (AES*To)
+#'       EI <- EI+h
+#'     }
+#'     
+#'     entropyBundle <- list(UnitEntropyScore = entropyTable,
+#'                           MaxEntropy = maxEntropy,
+#'                           AreaSummary = area,
+#'                           AreaEntropyScore = AES,
+#'                           AreaStandardizedEntropyScore = ASES,
+#'                           AreaEntropyIndex = EI)
+#'     
+#'     if(!is.null(dissimilarityValue)){
+#'       entropyBundle <- append(entropyBundle,list(DissimilarityIndex = DI))
+#'     }
+#'     if(!is.null(dissimilarityValueB)){
+#'       entropyBundle <- append(entropyBundle,list(ExposureIndex = EXI,
+#'                                                  IsolationIndex = II))
+#'     }
+#'     
+#'     
+#'     return(entropyBundle)
+#'   }else{
+#'     processEntropy(data,return=TRUE,verbose=verbose)
+#'   }
+#' }

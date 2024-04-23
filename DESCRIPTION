@@ -1,8 +1,8 @@
 Package: censusprofiler
 Type: Package
 Title: censusprofiler
-Version: 0.25.0
-Date: 2024-3-25
+Version: 0.25.1
+Date:
 Author: RW Stevenson
 Maintainer: RW Stevenson <thebobstevenson@protonmail.com>
 Imports: httr,tidyr,dplyr, sf, stringr, tigris, units, tmap, tmaptools,officer,flextable,formattable,jsonlite,paletteer,tibble,data.table, cowplot

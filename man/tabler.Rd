@@ -44,7 +44,7 @@ tabler(
 \arguments{
 \item{data_object}{A census data object.}
 
-\item{mode}{Logical parameter to specify whether margin of error should be calculated.}
+\item{mode}{Options for display calculations: "summarize", "summarizeinc","simple","bygeo","nosummary"}
 
 \item{tableID}{Formerly known as varBase, or concept, or group: i.e., "B01001"}
 
