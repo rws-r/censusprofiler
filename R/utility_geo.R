@@ -1177,19 +1177,20 @@ get_geocode_radius <- function(filterAddress=NULL,
     }else{
       stop("Invalid filterByGeoType selection. Currently accepting 'metro', 'place','combined_statistical_areas'.")
     }
-    
     buffer <- geofiltered$geometry
     buffer <- buffer %>% sf::st_transform('+proj=longlat +datum=WGS84')
-    
+
     if(verbose==TRUE)message(paste("    -ggr--Setting radius took ",round(difftime(Sys.time(),st,units = "sec"),2)))
     
     st <- Sys.time()
-    ## Get state from filterAddress / coords
-    statefp <- sf::st_filter(geo_states, buffer, .predicate = sf::st_intersects)
+    ## Get state from value supplied. Because we have to supply a state for place name, 
+    ## we are going to filter by state, as rarely do places cross state lines.
+    
+    statefp <- state
     if(geography=="state"){
       countyfp <- NULL
     }else{
-      geo_counties <- geo_counties %>% filter(STATEFP %in% statefp)
+      geo_counties <- geo_counties %>% filter(STATEFP == state | STUSPS == state)
       countyfp <- sf::st_filter(geo_counties, buffer, .predicate = sf::st_intersects)
     }
   }else{

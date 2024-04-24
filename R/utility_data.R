@@ -1286,6 +1286,12 @@ segregationMeasures <- function(data=NULL,
     est_total <- sub_total <- GEOID <- AWATER <- geometry <- 
     entropyScore <- centroids <- NULL
   
+  if(verbose==F)message("Heads up, this may take a few minutes.")
+  
+  if(is.null(majorityVar) || is.null(minorityVar)){
+    stop("To produce all variables, you need to include a majorityVar and minorityVar.")
+  }
+  
   if(verbose==TRUE)message("segregationMeasures() | Getting CV...")
   if(is.null(censusVars)){ 
     if(is.null(year)){
@@ -1352,7 +1358,7 @@ segregationMeasures <- function(data=NULL,
   }
   
   ## Data Cleaning and preparation
-  if(verbose==TRUE)message("   - EI: cleaning data...")
+  if(verbose==TRUE)message("segregationMeasures() | Cleaning data...")
   if(dataFormat!="vector"){
     if(type_data(data)==2){
       data <- data %>% ungroup()
@@ -1386,13 +1392,17 @@ segregationMeasures <- function(data=NULL,
   ## Get whole-area entropy estimates / entropy index
   # Combine populations
   
+  if(verbose==TRUE)message("segregationMeasures() | Running spatialHelper()...")
   data <- spatial_helper(data,geography=geography,
                          geosObject = geosObject,
                          verbose = verbose)
   
+  
+  if(verbose==TRUE)message("segregationMeasures() | Mutating area and ordering by area...")
   data <- data %>% mutate(area = sf::st_area(.))
   data <- data[order(-data$area),]
 
+  if(verbose==TRUE)message("segregationMeasures() | Filtering variables and creating summaries...")
   area <- data %>% filter(type %in% c("root","summary")) %>% 
     dplyr::group_by(labels,variable) %>% 
     dplyr::summarize(est_total = sum(estimate),
@@ -1403,6 +1413,7 @@ segregationMeasures <- function(data=NULL,
 
   TT <- unique(area$sub_total)
   
+  if(verbose==TRUE)message("segregationMeasures() | Creating spatial unions and centroids...")
   A_tot <- sf::st_union(data)
   A_center <- sf::st_centroid(A_tot)
   A <- sf::st_area(A_tot)
@@ -1412,6 +1423,7 @@ segregationMeasures <- function(data=NULL,
   geos <- geos[order(geos$area),]
 
   # get minority/majority populations of areas i
+  if(verbose==TRUE)message("segregationMeasures() | Getting minority/majority populations of areas...")
   iTable <- sf::st_drop_geometry(data) %>% 
     dplyr::select(variable,GEOID,area,estimate,subtotal) %>% 
     tidyr::pivot_wider(names_from = variable,values_from = estimate)
@@ -1435,9 +1447,10 @@ segregationMeasures <- function(data=NULL,
   
   P <- X/TT
   
+  if(verbose==TRUE)message("segregationMeasures() | Beginning Index Calculations:")
   ### (A) Measures of Evenness -------------
   #### Dissimilarity Index------------
-  if(verbose==TRUE)message("Calculating Dissimilarity Index...")
+  if(verbose==TRUE)message("segregationMeasures() | Calculating Dissimilarity Index...")
   dsiTip <- "Dissimilarity Index: `Conceptually, dissimilarity measures the percentage of a group's population that would have to change residence for each neighborhood to have the same percentage of that group as the metropolitan area overall. The index ranges from 0.0 (complete integration) to 1.0 (complete segregation).` [1]"
   
   dsip <- NULL
@@ -1469,7 +1482,7 @@ segregationMeasures <- function(data=NULL,
   }
   
   #### Multigroup Entropy Index --------
-  if(verbose==TRUE)message("Calculating Multigroup Entropy Index...")
+  if(verbose==TRUE)message("segregationMeasures() | Calculating Multigroup Entropy Index...")
   # Sourced: https://www2.census.gov/programs-surveys/demo/about/housing-patterns/multigroup_entropy.pdf
   MGE <- 0
   ## Part A is the "Diversity Index", describing the level of diversity in the metro area.
@@ -1545,7 +1558,7 @@ segregationMeasures <- function(data=NULL,
 
   ### (B) Measures of Exposure -------------
   #### Interaction & Isolation-------
-  if(verbose==TRUE)message("Calculating Interaction and Isolation...")
+  if(verbose==TRUE)message("segregationMeasures() | Calculating Interaction and Isolation...")
   Interaction <- 0
   Isolation <- 0
   
@@ -1563,13 +1576,13 @@ segregationMeasures <- function(data=NULL,
   }
   
   #### Correlation Ratio (eta squared)----------
-  if(verbose==TRUE)message("Calculating Correlation Ratio...")
+  if(verbose==TRUE)message("segregationMeasures() | Calculating Correlation Ratio...")
   Correlation <- (Isolation - P) / (1-P)
   CorrelationTip <- "Correlation Ratio (Eta Squared): `However, when there are more than two groups, the interaction and isolation indexes will not sum to 1.0 (one must add the interaction indexes for all other minority groups to the interaction and isolation indexes for the original minority group to obtain unity). Furthermore, the interaction indexes representing minority exposure to majority members and majority exposure to minority members will be equal only if the two groups constitute the same proportion of the population. An adjustment of the isolation index to control for this asymmetry yields a third exposure index, the correlation ratio, also known as eta-squared.` [1]"
   
   ### (C) Measures of Concentration -------------
   #### Delta ------------
-  if(verbose==TRUE)message("Calculating Delta...")
+  if(verbose==TRUE)message("segregationMeasures() | Calculating Delta...")
   delta <- 0
   DeltaTip <- "Delta: `One measure of concentration, originally proposed by Hoover (1941), is delta, which 'computes the proportion of [minority] members residing in areal units with above average density of [minority] members' (Massey and Denton, p. 290). The index gives the proportion of a group's population that would have to move across areal units to achieve a uniform density.` [1]"
 
@@ -1583,7 +1596,7 @@ segregationMeasures <- function(data=NULL,
   Delta <- 0.5 * delta
   
   #### Absolute Concentration ------------
-  if(verbose==TRUE)message("Calculating Absolute Concentration...")
+  if(verbose==TRUE)message("segregationMeasures() | Calculating Absolute Concentration...")
   AbsoluteConcentrationTip <- "Absolute Concentration: `Absolute concentration computes the total area inhabited by a group and compares this with the minimum and maximum areas (the areal sum, respectively, of the fewest number of the geographically smallest and the greatest number of the geographically largest areal units) that could accommodate a group of that size (at observed densities). The index varies from 0.0 to 1.0, where a score of 1.0 means that a group has achieved the maximum spatial concentration possible (all minority members live in the smallest areal units).` [1]" 
   stl <- iTable[order(iTable$area,decreasing=FALSE),]
   lts <- iTable[order(iTable$area,decreasing=TRUE),]
@@ -1662,7 +1675,7 @@ segregationMeasures <- function(data=NULL,
   AbsoluteConcentration <- 1 - ((AA-BB)/(CC-DD))
 
   # Relative Concentration 
-  if(verbose==TRUE)message("Calculating Relative Concentration...")
+  if(verbose==TRUE)message("segregationMeasures() | Calculating Relative Concentration...")
   # Argument A
   AA <- 0
   for(i in 1:n){
@@ -1705,7 +1718,7 @@ segregationMeasures <- function(data=NULL,
   
   ### (D) Measures of Centralization -------------
   #### Absolute / Relative Centralization ------------
-  if(verbose==TRUE)message("Calculating Absolute / Relative Centralization...")
+  if(verbose==TRUE)message("segregationMeasures() | Calculating Absolute / Relative Centralization...")
   iTableGeo <- iTableGeo %>% mutate(centroids = sf::st_centroid(geometry),
                                     distance = as.numeric(sf::st_distance(centroids,A_center)))
   iTableGeo <- iTableGeo[order(iTableGeo$distance),]
@@ -1742,7 +1755,7 @@ segregationMeasures <- function(data=NULL,
 
   ### (E) Measures of Clustering -------------
   #### Index of Spatial Proximity ------------
-  if(verbose==TRUE)message("Calculating Spatial Proximity...")
+  if(verbose==TRUE)message("segregationMeasures() | Calculating Spatial Proximity...")
   SPtip <- "Spatial Proximity: 'This statistic equals 1.0 if there is no differential racial clustering. It will be greater than one when members of the same racial group tend to live together. When P is less than one, it indicates an unusual form of segregation. Members of a group tend to live closer to members of the other group. One can interpret equation (8) as being an average of the intragroup proximities (P11/Poo and P22/POO), weighted by the fraction of each group in the population.' [3]"
   
   xi <- sf::st_drop_geometry(iTableGeo$xi)
@@ -1761,7 +1774,10 @@ segregationMeasures <- function(data=NULL,
   Pxy <- 0
   Pyy <- 0
   Ptt <- 0
+  
+  if(verbose==TRUE)pb <- txtProgressBar(min=0,max=n,style=3,width=80,char="|")
   for(i in 1:n){
+    if(verbose==TRUE)setTxtProgressBar(pb,i)
     xi <- as.numeric(ITG[i,"xi"])
     yi <- as.numeric(ITG[i,"yi"])
     ti <- as.numeric(ITG[i,"ti"])
@@ -1795,6 +1811,7 @@ segregationMeasures <- function(data=NULL,
    #   }
     }
   }
+  if(verbose==TRUE)close(pb)
   Pxx <- (1/((Xxi)^2))*Pxx
   Pxy <- (1/(Xxi*Yyi))*Pxy
   Pyy <- (1/((Yyi)^2))*Pyy
@@ -1848,7 +1865,7 @@ segregationMeasures <- function(data=NULL,
                               "0.0 - 1.0",
                               "0.0 - 1.0",
                               "0.0 - 1.0",
-                              "0.0 - 1.0",
+                              "-10.0 - 1.0",
                               "-1.0 - 1.0",
                               "-1.0 - 1.0",
                               "",
@@ -1863,7 +1880,7 @@ segregationMeasures <- function(data=NULL,
                                          "0 = no diversity",
                                          "0",
                                          "1",
-                                         "1.0 min. concentration high",
+                                         "0 = similar concentration; + more concentrated",
                                          " + = centralization; - = outlying",
                                          " >1 min. clustering",
                                          "",
