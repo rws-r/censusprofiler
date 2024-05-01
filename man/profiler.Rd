@@ -26,6 +26,7 @@ profiler(
   tract = NULL,
   block_group = NULL,
   metro = NULL,
+  place = NULL,
   ggr = NULL,
   geosObject = NULL,
   simpleReturn = FALSE,
@@ -79,6 +80,8 @@ of tracts, block_groups or other geography from. Options are currently
 \item{block_group}{Input (abb. or FIPS) of block group for search.}
 
 \item{metro}{Input (abb. or FIPS) of metropolitan statistical area for search.}
+
+\item{place}{Input (abb. or FIPS) of place for search.}
 
 \item{ggr}{Internal: to pass a get_geocode_radius() object to function.}
 

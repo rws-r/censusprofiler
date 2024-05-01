@@ -24,6 +24,7 @@
 #' @param tract Input (abb. or FIPS) of tract for search.
 #' @param block_group Input (abb. or FIPS) of block group for search.
 #' @param metro Input (abb. or FIPS) of metropolitan statistical area for search.
+#' @param place Input (abb. or FIPS) of place for search.
 #' @param ggr Internal: to pass a get_geocode_radius() object to function.
 #' @param geosObject Optional, attach geos object to simplify geo processes.
 #' @param verbose Logical parameter to specify whether to produce verbose output.
@@ -60,6 +61,7 @@ profiler <- function(name=NULL,
                      tract=NULL,
                      block_group=NULL,
                      metro=NULL,
+                     place=NULL,
                      ggr=NULL,
                      geosObject=NULL,
                      simpleReturn=FALSE,
@@ -133,6 +135,17 @@ profiler <- function(name=NULL,
                                   geosObject = geosObject,
                                   verbose = verbose)
       }
+    }
+  }else if(geography=="place"){
+    if(is.null(ggr)){
+      if(verbose==TRUE)message(paste(dur(st),"Finding geo area by radius..."))
+      ggr <- get_geocode_radius(place = place,
+                                coords = coords,
+                                geography = geography,
+                                state = state,
+                                geosObject = geosObject,
+                                year = year,
+                                fipsOnly = TRUE)
     }
   }else{
     if(verbose==TRUE)message(paste("profiler() | ",dur(st),"Getting geo var list..."))

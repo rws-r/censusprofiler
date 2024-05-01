@@ -1403,7 +1403,12 @@ segregationMeasures <- function(data=NULL,
   data <- data[order(-data$area),]
 
   if(verbose==TRUE)message("segregationMeasures() | Filtering variables and creating summaries...")
-  area <- data %>% filter(type %in% c("root","summary")) %>% 
+  if("level_2" %in% unique(data$type)){
+    lvls <- c("root","summary","level_1")
+  }else{
+    lvls <- c("root","summary")
+  }
+  area <- data %>% filter(type %in% lvls) %>% 
     dplyr::group_by(labels,variable) %>% 
     dplyr::summarize(est_total = sum(estimate),
                      sub_total = sum(subtotal),

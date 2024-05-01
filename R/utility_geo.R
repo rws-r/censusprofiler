@@ -345,7 +345,7 @@ geo_var_builder <- function(geography=c("all"),
     NAMELSADCO <- NULL
   
   ## Clean up potential geography errors
-  acceptable_geos <- c("us","state","county","tract","block group","all")
+  acceptable_geos <- c("us","state","county","tract","block group","place","all")
   for(i in 1:length(geography)){
     if(!(geography[i] %in% acceptable_geos)){
       if(geography[i]=="states"){
@@ -371,10 +371,17 @@ geo_var_builder <- function(geography=c("all"),
         geography[i] <- "block group"
       }else if(geography[i]=="metro"){
         geography[i] <- "metro"
+      }else if(geography[i]=="places"){
+        warning("    -gvb--NB: Geography param should be `place` not `places`...automatically corrected.")
+        geography[i] <- "place"
       }else{
         stop(paste("There is an error in your geography param. `",geography[i],"` is not a valid entry.",sep=""))
       }
     }
+  }
+  
+  if("place" %in% geography & is.null(state)){
+    stop("-gvb--You must provide a state along with place geography designation.")
   }
     
   if(verbose==TRUE)message("    -gvb--Initiating geo_var_builder()...")
@@ -390,7 +397,7 @@ geo_var_builder <- function(geography=c("all"),
       if("block group" %in% geography){
         if(is.null(geoDF$geo_blocks)){
           message("!> geo_var_builder() | No block groups provided. Trying a download.")
-          gb <- block_groups(cb=TRUE,state = state,county = county)
+          gb <- tigris::block_groups(cb=TRUE,state = state,county = county)
           gb <- gb %>% sf::st_transform('+proj=longlat +datum=WGS84')
           geoDF <- append(geoDF,list(geo_blocks = gb))
         }
@@ -398,7 +405,7 @@ geo_var_builder <- function(geography=c("all"),
       if("tract" %in% geography){
         if(is.null(geoDF$tracts)){
           message("!> geo_var_builder() | No tracts groups provided. Trying a download.")
-          gt <- tracts(cb=TRUE,state = state,county = county)
+          gt <- tigris::tracts(cb=TRUE,state = state,county = county)
           gt <- gt %>% sf::st_transform('+proj=longlat +datum=WGS84')
           geoDF <- append(geoDF,list(geo_blocks = gt))
         }
@@ -406,7 +413,7 @@ geo_var_builder <- function(geography=c("all"),
       if("county" %in% geography){
         if(is.null(geoDF$tracts)){
           message("!> geo_var_builder() | No county groups provided. Trying a download.")
-          gc <- counties(cb=TRUE,state = state)
+          gc <- tigris::counties(cb=TRUE,state = state)
           gc <- gc %>% sf::st_transform('+proj=longlat +datum=WGS84')
           geoDF <- append(geoDF,list(geo_blocks = gc))
         }
@@ -414,9 +421,18 @@ geo_var_builder <- function(geography=c("all"),
       if("state" %in% geography){
         if(is.null(geoDF$tracts)){
           message("!> geo_var_builder() | No state groups provided. Trying a download.")
-          gs <- states(cb=TRUE)
+          gs <- tigris::states(cb=TRUE)
           gs <- gs %>% sf::st_transform('+proj=longlat +datum=WGS84')
           geoDF <- append(geoDF,list(geo_blocks = gs))
+        }
+      }
+      if("place" %in% geography){
+        if(is.null(geoDF$places)){
+          message("!> geo_var_builder() | No places provided. Trying a download.")
+          if(is.null(state))stop("!> geo_var_builder() | You must provide a state for places geography to work.")
+          gp <- tigris::places(state=state)
+          gp <- gp %>% sf::st_transform('+proj=longlat +datum=WGS84')
+          geoDF <- append(geoDF,list(geo_places = gp))
         }
       }
   
@@ -571,6 +587,29 @@ geo_var_builder <- function(geography=c("all"),
       ## Return success flag to FALSE
       s <- FALSE
     }
+    
+    if("place" %in% geography | "all" %in% geography){
+      ## Set var to NULL for testing later.
+      geo_places <- NULL
+      if(try=="local"){
+        if(file.exists(file.path(getwd(),"data","geos.RDS",fsep="/"))){
+          gs <- readRDS(file.path(getwd(),"data","geos.RDS",fsep="/"))
+          geo_places <- gs$geo_places
+          s <- TRUE
+          if(verbose==TRUE)message("    -gvb--Found geo_places file.")
+        }else{
+          s <- FALSE
+        }
+      }
+      ## If either success was a failure (local) or skipped (remains false), download.
+      if(s==FALSE){
+        if(try=="local" && s==FALSE && verbose==TRUE)message("No file found for geo_blocks, moving to download...")
+        geo_places <- tigris::places(cb=TRUE,state = state)
+        geo_places <- geo_places %>% sf::st_transform('+proj=longlat +datum=WGS84')
+      }
+      s <- FALSE
+    }
+    
     # }
   }
   
@@ -582,6 +621,7 @@ geo_var_builder <- function(geography=c("all"),
     if(!is.null(geo_counties))geoDF[["geo_counties"]] <- geo_counties
     if(!is.null(geo_tracts))geoDF[["geo_tracts"]] <- geo_tracts
     if(!is.null(geo_blocks))geoDF[["geo_blocks"]] <- geo_blocks
+    if(!is.null(geo_places))geoDF[["geo_places"]] <- geo_places
   }
   
   return(geoDF)
@@ -916,6 +956,7 @@ Do you want to continue, and potentially overwrite? (Y/N)")
 #' @param fipsOnly Logical param to return only FIPS from radius.
 #' @param state Input (abb. or FIPS) of state for search.
 #' @param county Input (abb. or FIPS) of county for search.
+#' @param place Input (abb. or FIPS) of place for search.
 #' @param year Year for data call
 #' @param geoidLookup Lookup geography by GEOID.
 #' @param profile A profile data object.
@@ -964,6 +1005,7 @@ get_geocode_radius <- function(filterAddress=NULL,
                                filterByGeoValue=NULL,
                                state=NULL,
                                county=NULL,
+                               place=NULL,
                                geoidLookup=NULL,
                                geography=NULL,
                                radiusOnly=FALSE,
@@ -987,7 +1029,7 @@ get_geocode_radius <- function(filterAddress=NULL,
     stop("!> get_geocode_radius() | requires a geography parameter.")
   }
   
-  if(!(geography %in% c("us","state","county","tract","block group"))){
+  if(!(geography %in% c("us","state","county","tract","block group","place"))){
     if(str_detect(geography,"us")){
       rightgeo <- "us"
     }else if(str_detect(geography,"state")){
@@ -998,6 +1040,8 @@ get_geocode_radius <- function(filterAddress=NULL,
       rightgeo <- "tract"
     }else if(str_detect(geography,"block")){
       rightgeo <- "block group"
+    }else if(str_detect(geography,"place")){
+      rightgeo <- "place"
     }else{
       rightgeo <- NA
     }
@@ -1022,6 +1066,10 @@ get_geocode_radius <- function(filterAddress=NULL,
   if(!is.null(filterAddress) && is.null(filterRadius)){
     stop("get_geocode_radius() | WHOOPS. You forgot to include the radius value. Please submit again.")
   }
+
+  if(geography=="place" & is.null(state)){
+    stop("get_geocode_radius() | You must provide a state along with place geography designation.")
+  }
   
   ## Did I pass geos? If not, find them.
   if(is.null(geosObject)){
@@ -1037,13 +1085,15 @@ get_geocode_radius <- function(filterAddress=NULL,
   if(!is.null(geosObject$geo_counties))geo_counties <- geosObject$geo_counties
   if(!is.null(geosObject$geo_tracts))geo_tracts <- geosObject$geo_tracts
   if(!is.null(geosObject$geo_blocks))geo_blocks <- geosObject$geo_blocks 
+  if(!is.null(geosObject$geo_places))geo_places <- geosObject$geo_places 
   
   ## Check for class mismatches.
   if(!is.null(state)){
     if(inherits(geo_states$STATEFP,"character")==TRUE || 
        inherits(geo_counties$STATEFP,"character")==TRUE || 
        inherits(geo_tracts$STATEFP,"character")==TRUE || 
-       inherits(geo_blocks$STATEFP,"character")==TRUE && 
+       inherits(geo_blocks$STATEFP,"character")==TRUE || 
+       inherits(geo_places$STATEFP,"character")==TRUE && 
        is.numeric(state)){
       state <- as.character(state)
     }
@@ -1272,6 +1322,8 @@ get_geocode_radius <- function(filterAddress=NULL,
       CT <- geo_blocks
     }else if(geography=="county"){
       CT <- geo_counties
+    }else if(geography=="place"){
+      CT <- geo_places
     }else{
       CT <- geo_states
     }
@@ -1289,9 +1341,13 @@ get_geocode_radius <- function(filterAddress=NULL,
         }
       }
       CT <- ctCT
+    }else if(!is.null(statefp) && geography!="place"){
+      CT <- CT %>% filter(STATEFP %in% statefp)
     }else{
-      if(!is.null(statefp)){
-        CT <- CT %>% filter(STATEFP %in% statefp)
+      if(suppressWarnings(is.na(as.numeric(place)))){
+        CT <- CT %>% filter(NAME %in% place)
+      }else{
+        CT <- CT %>% filter(PLACEFP %in% place)
       }
     }
 
@@ -1351,6 +1407,8 @@ get_geocode_radius <- function(filterAddress=NULL,
         df <- append(df,list(tracts = CT$TRACTCE))
       }else if(geography=="block group"){
         df <- append(df,list(tracts = CT$TRACTCE,block_groups = CT$BLKGRPCE))
+      }else if (geography=="place"){
+        df <- append(df,list(places = CT$PLACEFP))
       }else{
         #df <- append(df,list(geoid = CT$GEOID))
       }
@@ -1362,6 +1420,8 @@ get_geocode_radius <- function(filterAddress=NULL,
         df <- append(df,list(tracts = CT$TRACTCE))
       }else if(geography=="block group"){
         df <- append(df,list(tracts = CT$TRACTCE,block_groups = CT$BLKGRPCE))
+      }else if (geography=="place"){
+        df <- append(df,list(places = CT$PLACEFP))
       }else{
       }
       df <- append(df,list(buffer = buffer))
@@ -1371,7 +1431,10 @@ get_geocode_radius <- function(filterAddress=NULL,
                  geoid = CT$GEOID,
                  states = states,
                  counties = counties,
-                 coordinates = coords)      
+                 coordinates = coords)  
+      if(geography=="place"){
+        df <- append(df,list(places = CT$PLACEFP))
+      }
     }else{
       df <- list(df = CT,
                  geoid = CT$GEOID,

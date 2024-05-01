@@ -148,11 +148,14 @@ capi <- function(year=NULL,
   if(is.null(dataset_main)){
     stop("!> You must provide a dataset. Options are `acs` and subsidiaries.")
   }
-  if(geography %in% c("region","division","subminor civil division","place","consolidated city")){
+  if(geography %in% c("region","division","subminor civil division","consolidated city")){
     stop(paste("!> Unfortunately, we cannot provide results for `",geography,"` geographies at this time.",sep=""))
   }
   if(is.null(tableID) && is.null(variables)){
     stop("!> No variables or tableID included. You need to include either a tableID to capture all subvariables, a tableID with numeric vector, or a complete vector of variables. You can also include a named list with multiple tableIDs and variables.")
+  }
+  if(geography=="place" && is.null(state)){
+    stop("!> You must provide a state along with place geography designation.")
   }
   # Set default if null passed
   if(is.null(filterSummaryLevels)){
@@ -450,10 +453,32 @@ capi <- function(year=NULL,
       }
     }else if(geography=="metro" || geography=="msa"){
       metro <- metro
+    }else if (geography=="place"){
+      if(length(ggr$places>1)){
+        place <- stringr::str_flatten(ggr$places,collapse=",")
+      }else{
+        place <- ggr$place
+      }
     }else{
       stop("!> No geography provided.")
     }
-    
+  }else if(geography=="place"){
+    if(is.null(ggr)){
+      if(verbose==TRUE)message(paste(dur(st),"Finding geo area by radius..."))
+      ggr <- get_geocode_radius(place = place,
+                                coords = coords,
+                                geography = geography,
+                                state = state,
+                                geosObject = geosObject,
+                                year = year,
+                                fipsOnly = TRUE)
+    }
+    if(length(ggr$places>1)){
+      place <- stringr::str_flatten(ggr$places,collapse=",")
+    }else{
+      place <- ggr$place
+    }
+     
   }else{
   ## Assign "*" if geography is NULL and required. Otherwise, flatten to allow for multiple entries.
     ## TODO This isn't very elegant. I think I can clean this up.
@@ -527,8 +552,8 @@ capi <- function(year=NULL,
     ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
   }else if(geography=="place"){
     ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
-    # forgeo <- paste("place")
-    # ingeo <- paste("state:",state,"&in=place:",place,sep="")
+     forgeo <- paste("place:",place,sep="")
+     ingeo <- paste("state:",state,sep="")
   }else if(geography=="consolidated city"){
     ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
     # forgeo <- paste("consolidated city")

@@ -11,6 +11,7 @@ get_geocode_radius(
   filterByGeoValue = NULL,
   state = NULL,
   county = NULL,
+  place = NULL,
   geoidLookup = NULL,
   geography = NULL,
   radiusOnly = FALSE,
@@ -41,6 +42,8 @@ of tracts, block_groups or other geography from. Options are currently
 \item{state}{Input (abb. or FIPS) of state for search.}
 
 \item{county}{Input (abb. or FIPS) of county for search.}
+
+\item{place}{Input (abb. or FIPS) of place for search.}
 
 \item{geoidLookup}{Lookup geography by GEOID.}
 
