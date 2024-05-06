@@ -403,7 +403,7 @@ geo_var_builder <- function(geography=c("all"),
         }
       }
       if("tract" %in% geography){
-        if(is.null(geoDF$tracts)){
+        if(is.null(geoDF$geo_tracts)){
           message("!> geo_var_builder() | No tracts groups provided. Trying a download.")
           gt <- tigris::tracts(cb=TRUE,state = state,county = county)
           gt <- gt %>% sf::st_transform('+proj=longlat +datum=WGS84')
@@ -411,7 +411,7 @@ geo_var_builder <- function(geography=c("all"),
         }
       }
       if("county" %in% geography){
-        if(is.null(geoDF$tracts)){
+        if(is.null(geoDF$geo_counties)){
           message("!> geo_var_builder() | No county groups provided. Trying a download.")
           gc <- tigris::counties(cb=TRUE,state = state)
           gc <- gc %>% sf::st_transform('+proj=longlat +datum=WGS84')
@@ -419,7 +419,7 @@ geo_var_builder <- function(geography=c("all"),
         }
       }
       if("state" %in% geography){
-        if(is.null(geoDF$tracts)){
+        if(is.null(geoDF$geo_states)){
           message("!> geo_var_builder() | No state groups provided. Trying a download.")
           gs <- tigris::states(cb=TRUE)
           gs <- gs %>% sf::st_transform('+proj=longlat +datum=WGS84')
@@ -427,7 +427,7 @@ geo_var_builder <- function(geography=c("all"),
         }
       }
       if("place" %in% geography){
-        if(is.null(geoDF$places)){
+        if(is.null(geoDF$geo_places)){
           message("!> geo_var_builder() | No places provided. Trying a download.")
           if(is.null(state))stop("!> geo_var_builder() | You must provide a state for places geography to work.")
           gp <- tigris::places(state=state)

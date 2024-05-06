@@ -174,7 +174,7 @@ create_comparison_data <- function(
       } 
     }
   }
-  
+
   if(verbose==TRUE)message("Getting CV...")
   if(is.null(censusVars)){ 
     CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
@@ -211,7 +211,7 @@ create_comparison_data <- function(
       }else{
         coords <- NULL
       }
-      
+
       if(st_is_empty(df[i,])==FALSE){
         x <- profiler(name = paste("State Comparison Info: ",df[i,]$NAME,sep=""),
                       tableID = tableID,

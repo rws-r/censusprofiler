@@ -156,13 +156,21 @@ profiler <- function(name=NULL,
                                     county=county,
                                     #  geosObject=geosObject,
                                     verbose=verbose,
-                                    test=FALSE)  
+                                    test=FALSE) 
+    }
+    if(is.null(ggr) & geography!="us"){
+      if(verbose==TRUE)message(paste("profiler() | ",dur(st),"Getting ggr..."))
+      ggr <- get_geocode_radius(state=state,
+                                county=county,
+                                geography=geography,
+                                geosObject = geosObject,
+                                verbose=verbose)
     }
   }
   
   ## If failure in geocode or coord lookup (or other geography parameters), stop
   ## implementation, as we cannot proceed.
-  if(is.null(ggr)){
+  if(is.null(ggr) & geography!="us"){
     if(verbose==TRUE)message("profiler() | No geo found for supplied parameters. Cannot complete profile.")
     return(NULL)
   }else{

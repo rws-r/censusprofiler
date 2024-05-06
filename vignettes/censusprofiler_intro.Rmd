@@ -31,7 +31,7 @@ This package was designed to interface with the American Community Survey in min
 
 # Workflows
 
-The basic censusprofile workflow revolves around `profiler()`, which makes data calls and parses the data into a census profile object. Users may select a variety of static geographies for calls (us, state, county, tract, block group), or use two additional methods for selecting a collection of smaller geographies (see below).
+The basic censusprofiler workflow revolves around function `profiler()`, which makes data calls and parses the data into a census profile object. Users may select a variety of static geographies for calls (us, state, county, tract, block group), or use two additional methods for selecting a collection of smaller geographies (see below).
 
 Censusprofiler logic is as follows:
 
@@ -112,9 +112,9 @@ Column names are described below:
 The `censusprofiler` logic may be optimized by preloading several data objects:
 
 -   census variables
--   geography variable object
+-   geography variable object (via `tigris`)
 
-These can be obtained by running `load_data(load_censusVariables=TRUE, load_geos=TRUE)`. The census variables object provides access to all variables available for the dataset queried (e.g., "acs5"), and is used for error-checking and dataframe formatting. The geography variable object reduces data calls for geographical functions by preloading the relevant shapefiles for the area queried. Both of these objects may be passed to `profiler()` and other functions and speed up processing time immensely. 
+These can be obtained by running `load_data(load_censusVariables=TRUE, load_geos=TRUE)`. The census variables object provides access to all variables available for the dataset queried (e.g., "acs5"), and is used for error-checking and dataframe formatting. The geography variable object reduces data calls for geographical functions by preloading relevant shapefiles for the area queried. Both of these objects may be passed to `profiler()` and other functions and speed up processing time immensely. 
 
 # Standalone Functions
 
@@ -137,8 +137,16 @@ tabler(profile,
        tableID = "B02001",
        dispPerc = TRUE,
        stateCompare = statesCompare,
-       state = 17,
-       usCompare = usCompare)
+       state = 17)
+
+```
+
+```{r warning=FALSE,message=FALSE}
+tabler(profile,
+       tableID = "B02001",
+       dispPerc = TRUE,
+       usCompare = usCompare,
+       state = 17)
 
 ```
 
