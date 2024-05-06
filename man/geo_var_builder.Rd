@@ -6,7 +6,7 @@
 \usage{
 geo_var_builder(
   geography = c("all"),
-  try = "local",
+  try = "download",
   state = NULL,
   county = NULL,
   geosObject = NULL,

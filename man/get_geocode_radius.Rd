@@ -20,6 +20,7 @@ get_geocode_radius(
   profile = FALSE,
   coords = NULL,
   intersectOverlap = 0.1,
+  neighbors = FALSE,
   year = NULL,
   test = FALSE,
   verbose = FALSE,
@@ -64,6 +65,8 @@ as an object.}
 
 \item{intersectOverlap}{A proportion of minimum required overlap from radius
 and unit area.}
+
+\item{neighbors}{Logical parameter to specify whether to get neighboring tracts around selected area.}
 
 \item{year}{Year for data call}
 
