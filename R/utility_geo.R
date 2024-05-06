@@ -332,7 +332,7 @@ geo_road_helper <- function(df=NULL,
 #' }
 #' 
 geo_var_builder <- function(geography=c("all"),
-                            try="local",
+                            try="download",
                             state=NULL,
                             county=NULL,
                             geosObject=NULL,
@@ -341,7 +341,7 @@ geo_var_builder <- function(geography=c("all"),
   
   ## Make all geo vars NULL
   geo_states <- geo_counties <- geo_tracts <- geo_blocks <- 
-    STATEFP <- STUSPS <- COUNTYFP <- NAME <- NAMELSAD <- 
+    geo_places <- STATEFP <- STUSPS <- COUNTYFP <- NAME <- NAMELSAD <- 
     NAMELSADCO <- NULL
   
   ## Clean up potential geography errors
@@ -950,6 +950,7 @@ Do you want to continue, and potentially overwrite? (Y/N)")
 #' @param coords Internal: passing already found coordinates to function.
 #' @param intersectOverlap A proportion of minimum required overlap from radius
 #' and unit area.
+#' @param neighbors Logical parameter to specify whether to get neighboring tracts around selected area.
 #' @param test Internal: Parameter to allow testing passthroughs [depreciated]
 #' @param verbose Internal: Parameter for printing feedback.
 #' @param geosObject Optional geosObject object to speed up geo processing.
@@ -1014,6 +1015,7 @@ get_geocode_radius <- function(filterAddress=NULL,
                                profile=FALSE,
                                coords=NULL,
                                intersectOverlap=0.1,
+                               neighbors=FALSE,
                                year=NULL,
                                test=FALSE,
                                verbose=FALSE,
@@ -1024,6 +1026,7 @@ get_geocode_radius <- function(filterAddress=NULL,
     PLACEFP <- GEOID10 <- intersectedArea <- unitArea <- intersectionProp <- 
     NAMELSAD <- geometry <- NULL
   
+  ## Initial Error Checking---------
   if(is.null(geography)){
     ##ADDTEST
     stop("!> get_geocode_radius() | requires a geography parameter.")
@@ -1071,6 +1074,7 @@ get_geocode_radius <- function(filterAddress=NULL,
     stop("get_geocode_radius() | You must provide a state along with place geography designation.")
   }
   
+  ## Get Geography Variables-------
   ## Did I pass geos? If not, find them.
   if(is.null(geosObject)){
     geosObject <- geo_var_builder(geography=c("state","county",geography),
@@ -1092,8 +1096,7 @@ get_geocode_radius <- function(filterAddress=NULL,
     if(inherits(geo_states$STATEFP,"character")==TRUE || 
        inherits(geo_counties$STATEFP,"character")==TRUE || 
        inherits(geo_tracts$STATEFP,"character")==TRUE || 
-       inherits(geo_blocks$STATEFP,"character")==TRUE || 
-       inherits(geo_places$STATEFP,"character")==TRUE && 
+       inherits(geo_blocks$STATEFP,"character")==TRUE && 
        is.numeric(state)){
       state <- as.character(state)
     }
@@ -1115,6 +1118,7 @@ get_geocode_radius <- function(filterAddress=NULL,
   if(verbose==TRUE)message(paste("    -ggr--Fetching geos took ",round(difftime(Sys.time(),st,units = "sec"),2),"  speed up by saving to env."))
   st <- Sys.time()
   
+  ## Build radius around filterAddress or coords-------
   if(!is.null(filterAddress) | !is.null(coords)){ 
     # Set the radius around the filtered address.
     
@@ -1126,6 +1130,7 @@ get_geocode_radius <- function(filterAddress=NULL,
     }
     
     if(is.null(coords)){
+      ### Build radius around filterAddress------
       coords <- geocoder(filterAddress,service="tryall")
       if(is.na(coords)){
         if(verbose==TRUE)message(paste("     -ggr--No coords supplied, and no geocode found for address. Skipping."))
@@ -1135,8 +1140,8 @@ get_geocode_radius <- function(filterAddress=NULL,
       
       if(verbose==TRUE)message(paste("    -ggr--Fetching geocode for filter address took ",round(difftime(Sys.time(),st,units = "sec"),2)))
       st <- Sys.time()
-      
-    }else{
+     }else{
+       ### Build radius around coords------
       if(inherits(coords,"sf")==TRUE){ # Account for sf
         if(sf::st_is_longlat(coords)==TRUE){
           if(verbose==TRUE)message("    -ggr--Valid sf coordinates provided.")
@@ -1158,20 +1163,26 @@ get_geocode_radius <- function(filterAddress=NULL,
       st <- Sys.time()
     }
     
+    ### Set buffer------
     buffer <- sf::st_buffer(coords,units::set_units(filterRadius*5280,feet))
+    bufferBig <- sf::st_buffer(coords,units::set_units((filterRadius+(filterRadius*0.5))*5280,feet))
     
     if(verbose==TRUE)message(paste("    -ggr--Setting radius took ",round(difftime(Sys.time(),st,units = "sec"),2)))
     
     st <- Sys.time()
-    ## Get state from filterAddress / coords
+    
+    ## Get state from filterAddress / coords--------
     statefp <- sf::st_filter(geo_states, buffer, .predicate = sf::st_intersects)$STATEFP
     if(geography=="state"){
       countyfp <- NULL
     }else{
       geo_counties <- geo_counties %>% filter(STATEFP %in% statefp)
-      countyfp <- sf::st_filter(geo_counties, buffer, .predicate = sf::st_intersects)
+      #Using buffer big to include potential counties for neighbors
+      countyfp <- sf::st_filter(geo_counties, bufferBig, .predicate = sf::st_intersects)
     }
-  }else if(!is.null(filterByGeoType)){
+    
+  # Build radius around filterByGeoType----------
+  }else if(!is.null(filterByGeoType)){ 
     # TODO Fix this to allow for state/county overlap of geo area. See fix above.
     message(paste(dur(st),"Finding geos by supplied geo object..."))
     if(is.null(filterByGeoValue)){
@@ -1228,6 +1239,8 @@ get_geocode_radius <- function(filterAddress=NULL,
       stop("Invalid filterByGeoType selection. Currently accepting 'metro', 'place','combined_statistical_areas'.")
     }
     buffer <- geofiltered$geometry
+    buffer <- sf::st_boundary(sf::st_buffer(buffer,units::set_units(500,feet)))
+    buffer <- buffer %>% sf::st_cast("POLYGON")
     buffer <- buffer %>% sf::st_transform('+proj=longlat +datum=WGS84')
 
     if(verbose==TRUE)message(paste("    -ggr--Setting radius took ",round(difftime(Sys.time(),st,units = "sec"),2)))
@@ -1244,6 +1257,7 @@ get_geocode_radius <- function(filterAddress=NULL,
       countyfp <- sf::st_filter(geo_counties, buffer, .predicate = sf::st_intersects)
     }
   }else{
+    #### Build ggr w/ no radius geos-------
     buffer <- NULL
     if(!is.null(state)){
       states <- geo_states %>% filter(STATEFP==state | STUSPS==state | NAME==state)
@@ -1294,6 +1308,7 @@ get_geocode_radius <- function(filterAddress=NULL,
   
   st <- Sys.time()
   
+  #### Set returns-----
   if(geocodeOnly==TRUE){
     return(coords)
   }else if(radiusOnly==TRUE){
@@ -1354,19 +1369,28 @@ get_geocode_radius <- function(filterAddress=NULL,
     if(verbose==TRUE)message(paste("    -ggr--Filtering tracts took ",round(difftime(Sys.time(),st,units = "sec"),2)))
     st <- Sys.time()
     CT <- CT %>% sf::st_transform('+proj=longlat +datum=WGS84')
+    # Preserve master list 
+    CTall <- CT
     if(!is.null(filterAddress) | !is.null(coords) | !is.null(filterByGeoType)){
-      CT <- sf::st_filter(CT,buffer, .predicate = sf::st_intersects)
       
-      if(!is.null(filterAddress)){
+      CT <- sf::st_filter(CT,buffer, .predicate = sf::st_intersects)
+    
+      if(!is.null(filterAddress) | !is.null(filterByGeoType)){
         ## For this section, I want to keep overlap of units that meet a certain
         ## criteria—encoded in the parameter intersectOverlap.
         # Find area of intersection
-        CT <- CT %>% mutate(unitArea = sf::st_area(geometry))
+
+        CT <- CT %>% mutate(unitArea = 
+                              sf::st_area(geometry))
+
         suppressWarnings( # Fussy about telling me about spatial constants.
-          CT <- CT %>% mutate(intersectedArea = sf::st_area(sf::st_intersection(CT,buffer)))
+          CT <- CT %>% mutate(intersectedArea = 
+                                sf::st_area(sf::st_intersection(CT,buffer)))
         )
-        CT <- CT %>% mutate(intersectionProp = as.numeric(intersectedArea/unitArea))
-        
+
+        CT <- CT %>% mutate(intersectionProp = 
+                              as.numeric(intersectedArea/unitArea))
+  
         if(verbose==TRUE)message(paste("    -ggr--Mutating intersect overlap took ",round(difftime(Sys.time(),st,units = "sec"),2)))
         
         st <- Sys.time()
@@ -1382,6 +1406,18 @@ get_geocode_radius <- function(filterAddress=NULL,
         }
         
         if(verbose==TRUE)message(paste("    -ggr--Filtering minimum overlap took ",round(difftime(Sys.time(),st,units = "sec"),2)))
+          
+        # Get neighbors
+        if(neighbors==TRUE){ 
+          buffer2 <- sf::st_buffer(sf::st_union(CT),units::set_units(500,feet))
+          CT2 <- sf::st_filter(CTall,buffer2, .predicate = sf::st_intersects)
+          CT2 <- CT2 %>% filter(!(GEOID %in% CT$GEOID))
+          
+          if(verbose==TRUE)message(paste("    -ggr--Getting neighbors took ",round(difftime(Sys.time(),st,units = "sec"),2)))
+          
+          CT <- CT %>% mutate(neighbor_level = 1)
+          CT2 <- CT2 %>% mutate(neighbor_level = 2)
+        }
       }
     }else{
       CT <- CT %>% mutate(unitArea = sf::st_area(geometry))
@@ -1403,10 +1439,14 @@ get_geocode_radius <- function(filterAddress=NULL,
         states = states,
         counties = counties
       )
+      if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
       if(geography=="tract"){
         df <- append(df,list(tracts = CT$TRACTCE))
+        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE))
       }else if(geography=="block group"){
         df <- append(df,list(tracts = CT$TRACTCE,block_groups = CT$BLKGRPCE))
+        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE,
+                                                block_groups.neighbors = CT2$BLKGRPCE))
       }else if (geography=="place"){
         df <- append(df,list(places = CT$PLACEFP))
       }else{
@@ -1416,10 +1456,14 @@ get_geocode_radius <- function(filterAddress=NULL,
       df <- list(geoid = CT$GEOID,
                  states = states,
                  counties = counties)
+      if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
       if(geography=="tract"){
         df <- append(df,list(tracts = CT$TRACTCE))
+        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE))
       }else if(geography=="block group"){
         df <- append(df,list(tracts = CT$TRACTCE,block_groups = CT$BLKGRPCE))
+        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE,
+                                                block_groups.neighbors = CT2$BLKGRPCE))
       }else if (geography=="place"){
         df <- append(df,list(places = CT$PLACEFP))
       }else{
@@ -1440,8 +1484,20 @@ get_geocode_radius <- function(filterAddress=NULL,
                  geoid = CT$GEOID,
                  states = states,
                  counties = counties,
-                 buffer = buffer,
                  coordinates = coords)
+      if(neighbors==TRUE)df <- append(df,list(df.neighbors = CT2))
+      if(geography=="tract"){
+        df <- append(df,list(tracts = CT$TRACTCE))
+        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE))
+      }else if(geography=="block group"){
+        df <- append(df,list(tracts = CT$TRACTCE,block_groups = CT$BLKGRPCE))
+        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE,
+                                                block_groups.neighbors = CT2$BLKGRPCE))
+      }
+      if(geography=="place"){
+        df <- append(df,list(places = CT$PLACEFP))
+      }
+      if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
     }
     
     if(verbose==TRUE)message(paste("    -ggr--Df construction took ",round(difftime(Sys.time(),st,units = "sec"),2)))

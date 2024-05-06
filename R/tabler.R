@@ -39,7 +39,6 @@
 #' @param block_group Input (abb. or FIPS) of block group for search.
 #' @param moe Logical parameter to specify whether margin of error should be calculated.
 #' @param groupPerc Logical parameter to specify whether to display percentages by type in tables.
-#' @param moe Logical parameter to specify whether or not to display margin of error.
 #'
 #' @import flextable
 #' @import officer

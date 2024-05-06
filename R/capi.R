@@ -672,7 +672,8 @@ capi <- function(year=NULL,
     data <- data %>% tidyr::pivot_wider(names_from = vartype,values_from = value)
     data$estimate <- as.numeric(data$estimate)
     data$moe <- as.numeric(data$moe)
-    data <- data %>% dplyr::mutate(moe = ifelse(moe %in% nas,NA,moe))
+    data <- data %>% dplyr::mutate(estimate = ifelse(estimate %in% nas,NA,estimate),
+                                   moe = ifelse(moe %in% nas,NA,moe))
     
     ### Add tableID--------------------------
     if(verbose==TRUE)message(paste(dur(st),"Adding tableID..."))

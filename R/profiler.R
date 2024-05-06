@@ -194,11 +194,14 @@ profiler <- function(name=NULL,
                  simpleReturn = simpleReturn,
                  test=test,
                  st=st)
-    if(simpleReturn==FALSE){ 
+    if(simpleReturn==FALSE){
+      ti <- CV.GROUPS[CV.GROUPS$table_id %in% tableID,]
       info <- list(name = name,
                    address = filterAddress,
                    radius = filterRadius,
                    year = year,
+                   tableids = paste(tableID,collapse=", "),
+                   tableid.concepts = ti,
                    coordinates = ggr$coordinates,
                    buffer = ggr$buffer,
                    geoid = ggr$geoid,
@@ -209,6 +212,9 @@ profiler <- function(name=NULL,
       }
       if(geography=="block group"){
         info <- append(info,list(tracts=ggr$tracts,block_groups=ggr$block_groups))
+      }
+      if(geography=="place"){
+        info <- append(info,list(places=ggr$places))
       }
       
       df <- list(info = info,
