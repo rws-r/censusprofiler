@@ -157,6 +157,18 @@ capi <- function(year=NULL,
   if(geography=="place" && is.null(state)){
     stop("!> You must provide a state along with place geography designation.")
   }
+  
+  # Check for minimum year
+  if(length(year)>1){
+    if(min(year)<2009 & dataset_main=="acs"){
+      stop("!> The ACS only provides data from 2009 on.")
+    }
+  }else{
+    if(year<2009 & dataset_main=="acs"){
+        stop("!> The ACS only provides data from 2009 on.")
+      }
+  }
+  
   # Set default if null passed
   if(is.null(filterSummaryLevels)){
     filterSummaryLevels <- "root"
@@ -518,116 +530,131 @@ capi <- function(year=NULL,
 # Prepare API Call --------------------------------------------------------
 ## Create GET URL ----------------------------------------------------------
 
-  if(verbose==TRUE)message(paste(dur(st),"Building URL for GET call..."))
-  url <- "http://api.census.gov/"
-  pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last,"variables")
-  path <- paste(pathElements,collapse="/")
-
-  ## Loops to handle multiple counties
-  datac <- NULL
-  for(i in 1:length(county)){ 
-  
-  ingeo <- NULL
-  if(geography=="us"){
-    forgeo <- paste("us",sep="")
-  }else if(geography=="state"){
-    forgeo <- paste("state:",state,sep="")
-  }else if(geography=="county"){
-    forgeo <- paste("county:",county[i],sep="")
-    ingeo <- paste("state:",state,sep="")
-  }else if(geography=="tract"){
-    forgeo <- paste("tract:",tract,sep="")
-    ingeo <- paste("state:",state,"&in=county:",county[i],sep="")
-  }else if(geography=="block group"){
-    forgeo <- paste("block group:",block_group,sep="")
-    ingeo <- paste("state:",state,"&in=county:",county[i],"&in=tract:",tract,sep="")
-  }else if(geography=="county subdivision"){
-    ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
-    stop("!> Unable to provide this geography at this time.")
-    forgeo <- paste("county subdivision")
-    ingeo <- paste("state:",state,"&in=county:",county[i],sep="")
-  }else if(geography=="metro" || geography=="msl"){
-    forgeo <- paste("metropolitan statistical area/micropolitan statistical area:",metro,sep="")
-  }else if(geography=="subminor civil division"){
-    ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
-  }else if(geography=="place"){
-    ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
-     forgeo <- paste("place:",place,sep="")
-     ingeo <- paste("state:",state,sep="")
-  }else if(geography=="consolidated city"){
-    ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
-    # forgeo <- paste("consolidated city")
-    # ingeo <- paste("state:",state,"&in=consolidated city:",consolidatedCity,sep="")
-  }else if(geography=="region"){
-    ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
-    # if(is.null(region))region <- "*"
-    # forgeo <- paste("region:",region,sep="")
-  }else if(geography=="division"){
-    ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
-    # if(is.null(division))division <- "*"
-    # forgeo <- paste("division:",division,sep="")
-  }else{
-    stop("!> No geography provided.")
-  }
-
-## Make GET Call -----------------------------------------------------------
-  if(verbose==TRUE)message(paste(dur(st),"GET CALL: ",url,path,"?get=",paste(varlist,",NAME",sep=""),"&for=",forgeo,"&in=",ingeo,sep=""))
-  
-  if(verbose==TRUE)message(paste(dur(st),"Initiate GET call..."))
-
-  # Run GET on number of chunks if large number of variables 
-  data <- list()
-  for(d in 1:chunks){
-  if(verbose==TRUE)message(paste(dur(st)," GET call #",d,"...",sep=""))
-   if(is.null(ingeo)){
-
-     dt <- httr::GET(url,
-                      path=path,
-                      query=list(get = paste(varlist[d],",NAME",sep=""),
-                                 "for" = forgeo,
-                                 key = CENSUS_API_KEY)
-                      )
-   }else{
-     dt <- httr::GET(url,
-                      path=path,
-                      query=list(get = paste(varlist[d],",NAME",sep=""),
-                                 "for" = forgeo,
-                                 "in" = ingeo,
-                                 key = CENSUS_API_KEY)
-                                 )
-   }
-   if(httr::status_code(dt)!=200){
-     ##ADDTEST?
-     stop(paste("!> There was an error in the GET call / json text. ERROR",httr::status_code(dt)))
-   }
-
-  if(verbose==TRUE)message(paste(dur(st),"Cleaning data and formatting to dataframe..."))
-   dt <- httr::content(dt,as="text")
+   if(verbose==TRUE)message(paste(dur(st),"Building URL for GET call..."))
    
-   dt <- jsonlite::fromJSON(dt)
-   dt <- as.data.frame(dt)
-   colnames(dt) <- dt[1,]
-   dt <- dt[-1,]
+   ## Loops to handle multiple years
+   for(t in 1:length(year)){
+     
+     url <- "http://api.census.gov/"
+     pathElements <- c("data",year[t],dataset_main,dataset_sub,dataset_last,"variables")
+     path <- paste(pathElements,collapse="/")
+     
+     ## Loops to handle multiple counties
+     datac <- NULL
+     for(i in 1:length(county)){ 
+       
+       ingeo <- NULL
+       if(geography=="us"){
+         forgeo <- paste("us",sep="")
+       }else if(geography=="state"){
+         forgeo <- paste("state:",state,sep="")
+       }else if(geography=="county"){
+         forgeo <- paste("county:",county[i],sep="")
+         ingeo <- paste("state:",state,sep="")
+       }else if(geography=="tract"){
+         forgeo <- paste("tract:",tract,sep="")
+         ingeo <- paste("state:",state,"&in=county:",county[i],sep="")
+       }else if(geography=="block group"){
+         forgeo <- paste("block group:",block_group,sep="")
+         ingeo <- paste("state:",state,"&in=county:",county[i],"&in=tract:",tract,sep="")
+       }else if(geography=="county subdivision"){
+         ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
+         stop("!> Unable to provide this geography at this time.")
+         forgeo <- paste("county subdivision")
+         ingeo <- paste("state:",state,"&in=county:",county[i],sep="")
+       }else if(geography=="metro" || geography=="msl"){
+         forgeo <- paste("metropolitan statistical area/micropolitan statistical area:",metro,sep="")
+       }else if(geography=="subminor civil division"){
+         ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
+       }else if(geography=="place"){
+         ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
+         forgeo <- paste("place:",place,sep="")
+         ingeo <- paste("state:",state,sep="")
+       }else if(geography=="consolidated city"){
+         ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
+         # forgeo <- paste("consolidated city")
+         # ingeo <- paste("state:",state,"&in=consolidated city:",consolidatedCity,sep="")
+       }else if(geography=="region"){
+         ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
+         # if(is.null(region))region <- "*"
+         # forgeo <- paste("region:",region,sep="")
+       }else if(geography=="division"){
+         ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
+         # if(is.null(division))division <- "*"
+         # forgeo <- paste("division:",division,sep="")
+       }else{
+         stop("!> No geography provided.")
+       }
+       
+       ## Make GET Call -----------------------------------------------------------
+       if(verbose==TRUE)message(paste(dur(st),"GET CALL: ",url,path,"?get=",paste(varlist,",NAME",sep=""),"&for=",forgeo,"&in=",ingeo,sep=""))
+       
+       if(verbose==TRUE)message(paste(dur(st),"Initiate GET call..."))
+       
+       # Run GET on number of chunks if large number of variables 
+       data <- list()
+       for(d in 1:chunks){
+         if(verbose==TRUE)message(paste(dur(st)," GET call #",d,"...",sep=""))
+         if(is.null(ingeo)){
+           
+           dt <- httr::GET(url,
+                           path=path,
+                           query=list(get = paste(varlist[d],",NAME",sep=""),
+                                      "for" = forgeo,
+                                      key = CENSUS_API_KEY)
+           )
+         }else{
+           dt <- httr::GET(url,
+                           path=path,
+                           query=list(get = paste(varlist[d],",NAME",sep=""),
+                                      "for" = forgeo,
+                                      "in" = ingeo,
+                                      key = CENSUS_API_KEY)
+           )
+         }
+         if(httr::status_code(dt)!=200){
+           ##ADDTEST?
+           stop(paste("!> There was an error in the GET call / json text. ERROR",httr::status_code(dt)))
+         }
+         
+         if(verbose==TRUE)message(paste(dur(st),"Cleaning data and formatting to dataframe..."))
+         dt <- httr::content(dt,as="text")
+         
+         dt <- jsonlite::fromJSON(dt)
+         dt <- as.data.frame(dt)
+         colnames(dt) <- dt[1,]
+         dt <- dt[-1,]
+         
+         if(verbose==TRUE)message(paste(dur(st),"Reshaping data..."))
+         dt <- tidyr::pivot_longer(dt,cols=1:chunksizes[d],names_to="variable")
+         
+         # Combine chunk loops
+         if(chunks>1){
+           data <- rbind(data,dt)
+         }else{
+           data <- dt
+         }
+       }
+       # Combine county loops
+       if(i>1){
+         datac <- rbind(datac,data)
+       }else{
+         datac <- data
+       }
+     }
+     data <- datac
+     
+     # Add year column
+     data <- data %>% mutate(year=year[t])
+     # Combine year loops 
+     if(t>1){
+       datat <- rbind(datat,data)
+     }else{
+       datat <- data
+     }
+     data <- datat
+   }  
 
-   if(verbose==TRUE)message(paste(dur(st),"Reshaping data..."))
-   dt <- tidyr::pivot_longer(dt,cols=1:chunksizes[d],names_to="variable")
-   
-   # Combine chunk loops
-   if(chunks>1){
-     data <- rbind(data,dt)
-   }else{
-     data <- dt
-   }
-  }
-  # Combine county loops
-  if(i>1){
-    datac <- rbind(datac,data)
-  }else{
-    datac <- data
-  }
-  }
-  data <- datac
-  
   if(simpleReturn==TRUE)return(data)
 # Reshape and clean combined data --------------------------------------------------
   if(verbose==TRUE)message(paste(dur(st),"Reshaping and cleaning combined data..."))
@@ -687,7 +714,7 @@ capi <- function(year=NULL,
     
     ### Add Year + relocate variable-------------------------- 
     if(verbose==TRUE)message(paste(dur(st),"Adding year + relocating variable..."))
-    data <- data %>% dplyr::mutate(year=year)
+    if(length(year)==1)data <- data %>% dplyr::mutate(year=year)
     data <- data %>% dplyr::relocate(variable, .after = year)
     
     ### Add Labels + Concept ---------------------------------
@@ -700,21 +727,24 @@ capi <- function(year=NULL,
     ### Add Subtotals + Proportions ---------------------
     if(verbose==TRUE)message(paste(dur(st),"Adding subtotals + proportions..."))
     data <- data %>% dplyr::relocate(estimate,.after=labels)
-    data <- data %>% dplyr::group_by(table_id,geoid) %>% 
+    data <- data %>% dplyr::group_by(year,table_id,geoid) %>% 
       dplyr::mutate(subtotal=ifelse(calculation=="median" | calculation=="mean",NA,max(estimate)),
                     pct = ifelse(calculation=="median" | calculation=="mean",NA,estimate/subtotal)) %>% 
       dplyr::ungroup()
     
-    data <- data %>% dplyr::group_by(table_id,geoid,type) %>% 
+    data <- data %>% dplyr::group_by(year,table_id,geoid,type) %>% 
       dplyr::mutate(subtotal_by_type=ifelse(calculation=="median" | calculation=="mean",NA,sum(estimate)),
-                    pct_by_type = ifelse(calculation=="median" | calculation=="mean",NA,estimate/subtotal_by_type)) %>% 
+                    pct_by_type = ifelse(calculation=="median" | calculation=="mean",NA,estimate/subtotal_by_type),
+                    moe_pct = ifelse(calculation=="median" | calculation=="median",NA,moe/subtotal_by_type)) %>% 
       dplyr::ungroup()
     
     data <- data %>% dplyr::relocate(moe,.after=pct_by_type)
+    data <- data %>% dplyr::relocate(moe_pct,.after=moe)
+    
     
     ### Add Geographical Data ----------------
     if(verbose==TRUE)message(paste(dur(st),"Adding geography..."))
-    data <- data %>% dplyr::relocate(name,.after=moe)
+    data <- data %>% dplyr::relocate(name,.after=moe_pct)
     data <- data %>% dplyr::mutate(geography=geography)
     if("state" %in% names(data))data <- data %>% dplyr::relocate(state,.after=geography)
     if("county" %in% names(data))data <- data %>% dplyr::relocate(county,.after=state)
