@@ -29,7 +29,7 @@
 #' @param geosObject Optional, attach geos object to simplify geo processes.
 #' @param verbose Logical parameter to specify whether to produce verbose output.
 #' @param st Internal parameter to provide timestamp consistency.
-#' @param fast Internal parameter for pseudo_tableID and stat table (capi())
+#' @param fast Internal parameter for stat table (capi())
 #' @param test Internal parameter for testing suite.
 #' @param simpleReturn Param to return raw data, not formatted.
 #' @param tableID Specification for concept, or group: e.g., "B01001"
@@ -66,7 +66,7 @@ profiler <- function(name=NULL,
                      geosObject=NULL,
                      simpleReturn=FALSE,
                      test=FALSE,
-                     fast=FALSE, # For pseudo_tableID + stat table
+                     fast=FALSE, 
                      verbose=FALSE,
                      st=NULL){
   

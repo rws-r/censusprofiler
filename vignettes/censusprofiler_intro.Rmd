@@ -35,7 +35,9 @@ The basic censusprofiler workflow revolves around function `profiler()`, which m
 
 Censusprofiler logic is as follows:
 
-profiler -\> geographic processing -\> census API call -\> data processing and formatting -\> data return (profile object)
+[1] profiler() call >> [2] process spatial data >> [3] census API call >> [4] census data processing and formatting >> [5] data return (profile object)
+
+[1] A profiler() call is the primary wrapper (though see more granular usage using capi() in later documents). [2] While data calls are made to api.census.gov, to make spatially restrictive calls, geographic data is required. `censusprofiler` uses `tigris` to fetch geospatial data (counties, tracts, block groups, etc.), and determine which geographical units should be called via census API. [3] Once specified geographies are identified, the API call is formed, and [4] formatted. Finally, [5] the profile object is returned.
 
 The profile object is a `list` with four data-types, pragmatically named `type1data`, `type2data`, `type3data`, and `type4data`. Type 1 data is a simple dataframe containing every entry by variable and geography. Type 2 data replicates Type 1 data, but removes the summary variable from the dataframe (typically with a \_001 suffix). Type 3 data provides aggregate values for the entire geographic area requested. Type 4 data is aggregate, with the summary variable removed.
 
@@ -43,9 +45,15 @@ It is also possible to get an unformatted dataset by using the `simpleReturn` pa
 
 ## Single Profile Creation
 
-A profile object is a geographically-bounded data call on provided variables. This geographical boundary may be obtained in three ways: as a static geographical unit (e.g., one or more counties), by supplying an address and radius in miles, or by capturing smaller geographies inside a larger one (e.g., all tracts inside a metropolitan area).
+To create a profile object, first determine what kind of call you want to make. While you can supply a simple list of census tracts, counties, states, or other geographies, the real fun with `censusprofiler` is its ability to dynamically capture specified geographies in relation to a point, or area. 
 
-Profile objects are lists with two elements: `info` and `data`. `Info` captures basic supplied information about the profile object, and `data` contains a list with the four datatypes described above.
+For example, say you wanted to build a profile object for the tracts within a 1 mile radius of an address. You would run profiler() using `filterAddress` and `filterRadius` and parameters. `censusprofiler` will select all tracts that intersect with the radius (overlap sensitivity can be modified using the `intersectOverlap` parameter).
+
+Additionally, you can fetch all the tracts in a county, or all the counties in a state. 
+
+One novel feature is the ability to use an irregular geography, such as a "place" to capture all intersecting census tracts/block groups. City boundaries do not always correspond to census tract/block group boundaries, so this level of analysis has some limitations. However, it may be useful for narrowing down tracts without manually supplying a list.
+
+Profile objects are large lists with two main elements: `info` and `data`. `Info` captures basic supplied information about the profile object, and `data` contains a list with the four datatypes described above.
 
 Let's build a simple profile object to evaluate racial composition of some census tracts in Chicago. We'll take as our address "60 W Walton St, Chicago, IL 60610" and run the following code:
 
@@ -68,7 +76,6 @@ print(names(profile))
 The first list item (`info`) contains supplied and deduced geographic details about the entity around which the profile is built.
 
 ```{r}
-print(names(profile$info))
 print(profile$info)
 ```
 
@@ -90,7 +97,7 @@ Column names are described below:
 -   `year`: The year fetched. For ACS data, it may be any year between 2009 and current year.
 -   `variable`: Dataframes list each individual variable with its associated values.
 -   `concept`: Concepts are short descriptions of their respective table_id.
--   `label`: Labels are short descriptions of the individual variables, within that concept.
+-   `labels`: Labels are short descriptions of the individual variables, within that concept.
 -   `estimate`: Because we are primarily focused on the ACS, we use "estimate" rather than "value" or "total." The ACS uses sampling procedures to render estimates, based on the decennial census for each geographical area. (See `moe` below)
 -   `subtotal`: Subtotals are calculated on the basis of geographical units (or geoids). Because profile objects often include multiple tracts, or counties, it is helpful to see subtotals of table_ids x geographic unit. These are clearest in type 1/2 data. Total combined area tallies are found in type 3/4 data.
 -   `pct`: Calculated estimate percentages of subtotals, per geographic unit.
@@ -114,7 +121,7 @@ The `censusprofiler` logic may be optimized by preloading several data objects:
 -   census variables
 -   geography variable object (via `tigris`)
 
-These can be obtained by running `load_data(load_censusVariables=TRUE, load_geos=TRUE)`. The census variables object provides access to all variables available for the dataset queried (e.g., "acs5"), and is used for error-checking and dataframe formatting. The geography variable object reduces data calls for geographical functions by preloading relevant shapefiles for the area queried. Both of these objects may be passed to `profiler()` and other functions and speed up processing time immensely. 
+These can be obtained by running `load_data(load_censusVariables=TRUE, load_geos=TRUE)`. The census variables object provides access to all variables available for the dataset queried (e.g., "acs5"), and is used for error-checking and dataframe formatting. The geography variable object reduces data calls for geographical functions by preloading relevant shapefiles for the area queried. Both of these objects may be passed to `profiler()` and other functions and speed up processing time immensely, otherwise this data must be downloaded each time. 
 
 # Standalone Functions
 
