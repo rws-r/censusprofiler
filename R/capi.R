@@ -35,7 +35,7 @@
 #' @param geosObject Optional, attach geos object to simplify geo processes.
 #' @param filterSummary Logical parameter to specify whether to filter out summary levels (typically _001 and therefore "root").
 #' @param filterSummaryLevels Explicit description of lowest type denoting summary level. Also excludes lower levels.
-#' @param fast Internal parameter for pseudo_tableID and stat table
+#' @param fast Internal parameter for stat table
 #' @param test Internal parameter for testing suite.
 #' @param simpleReturn Param to return raw data, not formatted.
 #' @param st Internal parameter to provide timestamp consistency.
@@ -173,29 +173,25 @@ capi <- function(year=NULL,
   if(is.null(filterSummaryLevels)){
     filterSummaryLevels <- "root"
   }
+  
+  if(!is.null(dataset_last)){
+    if(dataset_last=="pums" & !(geography %in% c("region","division","state"))){
+      stop(paste("!> ",geography," is not an acceptable geography for pums data. Use region, division, or state.",sep=""))
+    }
+  }
 
 ## Data init ---------------------------------------------------------------
 
   # TODO Allow for caching of this data or not. Request permission.
   if(verbose==TRUE)message("Getting CV...")
   if(is.null(censusVars)){ 
-    CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
+    CV <- get_census_variables(year=year, 
+                               dataset_main = dataset_main, 
+                               dataset_sub = dataset_sub, 
+                               dataset_last = dataset_last)
   }else{
     CV <- censusVars
   }
-  CV.VARS <- CV[[1]]
-  CV.GROUPS <- CV[[2]]
-  
-  # Check for mode mismatch
-  # if(!is.null(tableID)){
-  #   varcalccheck <- CV[[2]] %>% filter(table_id %in% tableID)
-  #   if(!is.na(match("median",varcalccheck$calculation)) & profile==TRUE){
-  #     warning(paste("Note: tableID `",tableID,"` is a median value, and will not properly calculate in the summary tables. Aggregates especially will not be accurate.",sep=""))
-  #   }
-  #   if(!is.na(match("median",varcalccheck$calculation)) & simpleReturn==FALSE){
-  #     warning(paste("Note: tableID `",tableID,"` is a median value, and will not properly calculate in the summary tables. Aggregates especially will not be accurate.",sep=""))
-  #   } 
-  # }
 
 ## Internal Functions ------------------------------------------------------
   
@@ -204,100 +200,59 @@ capi <- function(year=NULL,
 # Data Preparation -----------------------------------------------------------
    CENSUS_API_KEY <- Sys.getenv("CENSUS_API_KEY")
 
- ## Run tableID check to grab prefix and path -------------------------------
-   if(verbose==TRUE)message(paste(dur(st),"Running tableID check to grab prefix and path..."))
-   
-   if(!is.null(variables) && is.null(tableID)){
-     tableID <- pseudo_tableID(variables,fast=TRUE,test=test,verbose=verbose)
-   }
-   
-   tableID_pre.path <- tableID_pre_check(tableID)
-   for(a in 1:length(tableID)){
-     if(tableID_pre.path[[a]][1]=="NOTFOUND"){
-       stop("!> There seems to be an error in your tableID. Check for typos.")
-     }
-   }
-   if(tableID_pre.path[1]=="NO_TABLE_ID"){
-     tableID <- pseudo_tableID(variables,test=test,verbose=verbose)
-   }
+ ## Run tableID_variable_preflight check to check variables and tableIDs, and 
+ ## clean up lists -------------------------------
+  if(verbose==TRUE)message(paste(dur(st),"Running tableID_variable_preflight..."))
+  
 
-    ## Build variable list with error checks -----------------------------------
-
-   if(verbose==TRUE)message(paste(dur(st),"Building variable list with error checks..."))
-
-   # Assign all variables logic if `all` is specified.
-   if((is.null(variables) || length(variables)==1 && variables=="all")){ 
-     if(is.null(tableID)){
-       stop("!> To add all variables, you need to provide a tableID.")
-     }
-     variables <- (CV[[1]] %>% filter(table_id %in% tableID))$name
-     
-   }else{
-     if(verbose==TRUE)message(paste(dur(st),"Running varInputCheck()..."))
-     viC <- varInputCheck(tableID=tableID,variables=variables)
-     variables <- viC$variables
-   }
-   
-   if(length(variables)==1 && variables!="all"){  ## Single entry
-     varlist <- variable_formatter(var=variables,
-                                   tipc=tableID_pre.path,
-                                   tableID=tableID,
-                                   censusVars=CV)
-     varcount <- length(varlist)
-     chunks <- 1 # Default chunk number (for sizing below)
-     chunksize <- 48
-     chunksizes <- varcount # Default chunksizes number
-     varlist <- stringr::str_flatten(varlist,collapse=",")
-    }else{  ## Multiple entry
-     varlist <- NULL
-    for(i in 1:length(variables)){
-      varlist <- c(varlist,variable_formatter(var=variables[i],
-                                              tipc=tableID_pre.path,
-                                              censusVars=CV))
-     }
-    # For later reshaping, find total number of varlist, and break into chunks if > 50
-    varcount <- length(varlist)
-
-    # Census API has a limit of 50 variables at a time. We need to break the 
-    # variable list down into serviceable chunks. 
-    if(verbose==TRUE)message(paste(dur(st),"Checking variable length and trimming if needed..."))
-
-    chunks <- 1 # Default chunk number (for sizing below)
-    chunksize <- 48
-    chunksizes <- varcount # Default chunksizes number
+    preflight_check <- tableID_variable_preflight(tableID = tableID,
+                                                  variables = variables,
+                                                  censusVars = CV,
+                                                  verbose = verbose)
     
-    if(varcount>chunksize){
-      chunks <- ceiling(varcount/chunksize)
-      vchunks <- NULL
-      chunksizes <- NULL
-      for(c in 1:chunks){
-        s <- 1+chunksize*(c-1) # start parameter for chunk. Limiting to 48 for buffer.
-        ifelse(chunks==c,e <- varcount,e <- chunksize*c) # end parameter for chunk
-        vc <- varlist[s:e]
-        vc <- stringr::str_flatten(vc,collapse=",")
-        vchunks <- c(vchunks,vc)
-        chunksizes[paste("chunk_",c,sep = "")] <- e-(chunksize*(c-1))
-      }
-      varlist <- vchunks
-    }else{
-      varlist <- stringr::str_flatten(varlist,collapse=",") 
-     }
+    tableID <- preflight_check$tableID
+    variables <- preflight_check$variables
+   
+  # Census API has a limit of 50 variables at a time. We need to break the 
+  # variable list down into serviceable chunks. 
+  if(verbose==TRUE)message(paste(dur(st),"Checking variable length and trimming if needed..."))
+  # For later reshaping, find total number of variables, and break into chunks if > 50
+  varcount <- length(variables)
+  chunks <- 1 # Default chunk number (for sizing below)
+  chunksize <- 48
+  chunksizes <- varcount # Default chunksizes number
+  
+  if(varcount>chunksize){
+    chunks <- ceiling(varcount/chunksize)
+    vchunks <- NULL
+    chunksizes <- NULL
+    for(c in 1:chunks){
+      s <- 1+chunksize*(c-1) # start parameter for chunk. Limiting to 48 for buffer.
+      ifelse(chunks==c, e <- varcount, e <- chunksize*c) # end parameter for chunk
+      vc <- variables[s:e]
+      vc <- paste(vc,collapse=",")
+      vchunks <- c(vchunks,vc)
+      chunksizes[paste("chunk_",c,sep = "")] <- e-(chunksize*(c-1))
     }
+    varlist <- vchunks
+  }else{
+    varlist <- paste(variables,collapse=",") 
+  }
 
 ## TableID checks ----------------------------------------------------------
    
-   if(!is.null(variables) && is.null(tableID)){
-     # We engage pseudo_tableID down in reshape section.
-   }else{
-     # Check both directions.
-     ptid <- pseudo_tableID(variables,test=test,verbose=verbose)
-     for(j in 1:length(tableID)){
-       if(!(tableID[j] %in% ptid))stop(paste("!> It appears there is a variable/tableID mismatch. `",tableID[j],"` does not represent every variable given.",sep=""))
-     }
-     for(k in 1:length(ptid)){
-       if(!(ptid[k] %in% tableID))stop("!> It appears there is a variable/tableID mismatch. More tableIDs in variables than listed explicitly in tableID parameter.")   
-     }
-    }
+   # if(!is.null(variables) && is.null(tableID)){
+   #   # We engage pseudo_tableID down in reshape section.
+   # }else{
+   #   # Check both directions.
+   #   ptid <- pseudo_tableID(variables,test=test,verbose=verbose)
+   #   for(j in 1:length(tableID)){
+   #     if(!(tableID[j] %in% ptid))stop(paste("!> It appears there is a variable/tableID mismatch. `",tableID[j],"` does not represent every variable given.",sep=""))
+   #   }
+   #   for(k in 1:length(ptid)){
+   #     if(!(ptid[k] %in% tableID))stop("!> It appears there is a variable/tableID mismatch. More tableIDs in variables than listed explicitly in tableID parameter.")   
+   #   }
+   #  }
  
  ## Geography Functionality -------------------------------------------------
 
@@ -456,6 +411,7 @@ capi <- function(year=NULL,
       # county <- stringr::str_flatten(unique(ggr$counties),collapse=",")
       # tract <- stringr::str_flatten(unique(ggr$tracts),collapse=",")
       # Keep unflattened for tract call, due to loops.
+      state <- ggr$states
       county <- ggr$counties
       tract <- "*" # > Filtering happens after the data call to simplify the call itself.
       if(length(ggr$tracts>1)){
@@ -585,7 +541,7 @@ capi <- function(year=NULL,
        }else{
          stop("!> No geography provided.")
        }
-       
+
        ## Make GET Call -----------------------------------------------------------
        if(verbose==TRUE)message(paste(dur(st),"GET CALL: ",url,path,"?get=",paste(varlist,",NAME",sep=""),"&for=",forgeo,"&in=",ingeo,sep=""))
        
@@ -689,10 +645,10 @@ capi <- function(year=NULL,
 
     ### If filterAddress and filterByGeoType, perform data filtering now-------
     if(verbose==TRUE)message("Filtering data...")
-    if((!is.null(filterAddress) | !is.null(filterByGeoType)) && (geography=="tract") || geography=="block group"){
+    if((!is.null(filterAddress) | !is.null(filterByGeoType)) & (geography=="tract") || geography=="block group"){
         data <- data[data$geoid %in% ggr$geoid,]
     }
-    
+
     data$value <- as.numeric(data$value)
     data <- data %>% dplyr::mutate(vartype = ifelse(stringr::str_sub(data$variable,-1,-1)=="E","estimate","moe"))
     data <- data %>% dplyr::mutate(variable=stringr::str_sub(data$variable,1,-2))
@@ -704,7 +660,10 @@ capi <- function(year=NULL,
     
     ### Add tableID--------------------------
     if(verbose==TRUE)message(paste(dur(st),"Adding tableID..."))
-    tableID <- pseudo_tableID(data$variable,fast=fast,test=test,verbose=verbose)
+    tableID <- tableID_variable_preflight(variables=data$variable,
+                                          censusVars = CV,
+                                          verbose=verbose)
+    tableID <- tableID$tableID
     data <- data %>% dplyr::mutate(table_id = tableID)
     
     ### Add Variable--------------------------
@@ -741,7 +700,7 @@ capi <- function(year=NULL,
     data <- data %>% dplyr::relocate(moe,.after=pct_by_type)
     data <- data %>% dplyr::relocate(moe_pct,.after=moe)
     
-    
+
     ### Add Geographical Data ----------------
     if(verbose==TRUE)message(paste(dur(st),"Adding geography..."))
     data <- data %>% dplyr::relocate(name,.after=moe_pct)
@@ -763,7 +722,6 @@ capi <- function(year=NULL,
     }
     
     data <- data %>% dplyr::relocate(calculation,type,type_base,varID,.after=geoid)
-
     
     if(verbose==TRUE)message(paste(dur(st),"Creating type 1 data..."))
     data_type_1 <- data

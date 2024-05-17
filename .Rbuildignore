@@ -74,3 +74,6 @@
 ^tests/testthat/test-variable_pre_check\.R$
 ^tests/testthat/test-varInputCheck\.R$
 ^vignettes/censusprofiler_intro\.Rmd$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

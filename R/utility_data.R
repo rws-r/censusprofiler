@@ -329,7 +329,6 @@ get_census_variables <- function(year=NULL,
     url <- "http://api.census.gov"
     pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last,"variables")
     path <- paste(pathElements,collapse="/")
-    
     cv <- httr::GET(url,
                     path=path)
     
@@ -344,11 +343,13 @@ get_census_variables <- function(year=NULL,
     cv <- as.data.frame(cv)
     colnames(cv) <- cv[1,]
     cv <- cv[-1,]
-    
+
     if(verbose==TRUE)message(paste("Reshaping data..."))
     ## Filter out the extraneous rows.
     if(grepl("acs",dataset_main,ignore.case = TRUE)==TRUE){
-      cv <- cv[grepl("Estimate!!*",cv$label)==TRUE,] 
+      if(is.null(dataset_last)){
+        cv <- cv[grepl("Estimate!!*",cv$label)==TRUE,]  
+      }
     }else{
       cv <- subset(cv,grepl("!!Total*",cv$label) | 
                      grepl("!!Median*",cv$label))
@@ -357,65 +358,74 @@ get_census_variables <- function(year=NULL,
     ## Sort by ascending `name`
     cv <- cv[order(cv$name),]
     
-    ## Clean up variable names
-    cv$name <- substr(cv$name,1,nchar(cv$name)-1)
-    
-    ## Add nice extra info.
-    cv <- cv %>% dplyr::mutate(table_id=gsub('(_*?)_.*','\\1',name),
-                               varID=gsub(".*_","",name),
-                               calculation = dplyr::case_when(
-                                 stringr::str_detect(concept,"(?i)MEDIAN")==TRUE ~ "median",
-                                 stringr::str_detect(concept,"(?i)MEAN ")==TRUE ~ "mean",
-                                 stringr::str_detect(concept,"(?i)AVERAGE")==TRUE ~ "mean",
-                                 .default = "count"),
-                               type = dplyr::case_when(
-                                 stringr::str_count(label,"!!") == 1 ~ "root",
-                                 stringr::str_count(label,"!!") == 2 ~ "summary",
-                                 stringr::str_count(label,"!!") == 3 ~ "level_1",
-                                 stringr::str_count(label,"!!") == 4 ~ "level_2",
-                                 stringr::str_count(label,"!!") == 5 ~ "level_3",
-                                 stringr::str_count(label,"!!") == 6 ~ "level_4",
-                                 .default = "other"
-                               ),
-                               type_base = dplyr::case_when(
-                                 str_count(label,"!!") == 1 ~ "root",
-                                 str_count(label,"!!") > 1 ~ "vars",
-                                 .default = "other"
-                               ))
-    
-    if(detailed_tagging==TRUE){
-      if(verbose==TRUE)message("     Creating detailed tagging...")
-      if(verbose==TRUE)pb <- txtProgressBar(min = 1, max = nrow(cv), style = 3)
-      for(i in 1:nrow(cv)){
-        x <- cv[i,'name']
-        pre <- dplyr::case_when(
-          stringr::str_starts(x,"B") ~ "B",   # Detailed Tables: Base Table
-          stringr::str_starts(x,"CP") ~ "CP", # Comparison Profile
-          stringr::str_starts(x,"C") ~ "C",   # Detailed Tables: Collapsed Table
-          stringr::str_starts(x,"S") ~ "S",   # Subject Table
-          stringr::str_starts(x,"DP") ~ "DP", # Data Profile
-          stringr::str_starts(x,"S0201") ~ "S0201",# Selected Population Profile
-          #stringr::str_starts(x,"R") ~ "",    # Ranking Table (TODO this and below exist, but can't find them rn)
-          #stringr::str_starts(x,"GCT") ~ "",  # Geographic Comparison Table
-          #stringr::str_starts(x,"K20") ~ "",  # Supplemental Table
-          #stringr::str_starts(x,"XK") ~ "",   # Experimental Estimates
-          #stringr::str_starts(x,"NP") ~ "",   # Narrative Profile
-          .default = "UNKNOWN"
-        )
-        
-        post <- str_sub(unlist(stringr::str_split(x,"_"))[1],-1,-1)
-        
-        cv[i,'table_type'] <- pre
-        cv[i,'sub_table'] <- post
-        
-        if(verbose==TRUE)setTxtProgressBar(pb, i)
+    if(!is.null(dataset_last)){
+      #cv <- data.frame(name=cv$name,label=cv$label,concept=cv$concept)
+      cv <- cv %>% mutate(var_type = variable_typer(name))
+      return(cv)
+    }else{
+      ## Clean up variable names
+      cv$name <- substr(cv$name,1,nchar(cv$name)-1)
+      
+      ## Add nice extra info.
+      cv <- cv %>% dplyr::mutate(table_id=gsub('(_*?)_.*','\\1',name),
+                                 varID=gsub(".*_","",name),
+                                 calculation = dplyr::case_when(
+                                   stringr::str_detect(concept,"(?i)MEDIAN")==TRUE ~ "median",
+                                   stringr::str_detect(concept,"(?i)MEAN ")==TRUE ~ "mean",
+                                   stringr::str_detect(concept,"(?i)AVERAGE")==TRUE ~ "mean",
+                                   .default = "count"),
+                                 type = dplyr::case_when(
+                                   stringr::str_count(label,"!!") == 1 ~ "root",
+                                   stringr::str_count(label,"!!") == 2 ~ "summary",
+                                   stringr::str_count(label,"!!") == 3 ~ "level_1",
+                                   stringr::str_count(label,"!!") == 4 ~ "level_2",
+                                   stringr::str_count(label,"!!") == 5 ~ "level_3",
+                                   stringr::str_count(label,"!!") == 6 ~ "level_4",
+                                   .default = "other"
+                                 ),
+                                 type_base = dplyr::case_when(
+                                   str_count(label,"!!") == 1 ~ "root",
+                                   str_count(label,"!!") > 1 ~ "vars",
+                                   .default = "other"
+                                 ),
+                                 var_type = variable_typer(name)
+                                 )
+      
+      if(detailed_tagging==TRUE){
+        if(verbose==TRUE)message("     Creating detailed tagging...")
+        if(verbose==TRUE)pb <- txtProgressBar(min = 1, max = nrow(cv), style = 3)
+        for(i in 1:nrow(cv)){
+          x <- cv[i,'name']
+          pre <- dplyr::case_when(
+            stringr::str_starts(x,"B") ~ "B",   # Detailed Tables: Base Table
+            stringr::str_starts(x,"CP") ~ "CP", # Comparison Profile
+            stringr::str_starts(x,"C") ~ "C",   # Detailed Tables: Collapsed Table
+            stringr::str_starts(x,"S") ~ "S",   # Subject Table
+            stringr::str_starts(x,"DP") ~ "DP", # Data Profile
+            stringr::str_starts(x,"S0201") ~ "S0201",# Selected Population Profile
+            #stringr::str_starts(x,"R") ~ "",    # Ranking Table (TODO this and below exist, but can't find them rn)
+            #stringr::str_starts(x,"GCT") ~ "",  # Geographic Comparison Table
+            #stringr::str_starts(x,"K20") ~ "",  # Supplemental Table
+            #stringr::str_starts(x,"XK") ~ "",   # Experimental Estimates
+            #stringr::str_starts(x,"NP") ~ "",   # Narrative Profile
+            .default = "UNKNOWN"
+          )
+          
+          post <- str_sub(unlist(stringr::str_split(x,"_"))[1],-1,-1)
+          
+          cv[i,'table_type'] <- pre
+          cv[i,'sub_table'] <- post
+          
+          if(verbose==TRUE)setTxtProgressBar(pb, i)
+        }
+        if(verbose==TRUE)close(pb)
       }
-      if(verbose==TRUE)close(pb)
+      
+      cvt <- unique(cv[c("table_id","concept","calculation")])
+      cvlist <- list(variables = cv, groups = cvt)
+      
+      return(cvlist)
     }
-    
-    cvt <- unique(cv[c("table_id","concept","calculation")])
-    cvlist <- list(variables = cv, groups = cvt)
-    return(cvlist)
     
   }else{
     url <- "http://api.census.gov"
@@ -854,7 +864,7 @@ load_data <- function(load_censusVars = FALSE,
 #' @param geosObject Optional, attach geos object to simplify geo processes.
 #' @param verbose Logical parameter to specify whether to produce verbose output.
 #' @param st Internal parameter to provide timestamp consistency.
-#' @param fast Internal parameter for pseudo_tableID and stat table (capi())
+#' @param fast Internal parameter for stat table (capi())
 #' @param test Internal parameter for testing suite.
 #' @param simpleReturn Param to return raw data, not formatted.
 #' @param tableID Specification for concept, or group: e.g., "B01001"
@@ -1173,41 +1183,6 @@ profile_summary <- function(data=NULL,
   }
   attr(combinedData,"dataType") <- 8
   return(combinedData)
-}
-
-# pseudo_tableID--------------------------------------
-pseudo_tableID <- function(vars,
-                           fast=FALSE,
-                           test=FALSE,
-                           verbose=FALSE){
-  tid <- NULL
-  if(test==FALSE && verbose==TRUE && length(vars)>1)pb <- txtProgressBar(min = 1, max = length(vars), style = 3)
-  if(fast==FALSE){
-    for(v in 1:length(vars)){
-      if(str_detect(vars[v],"_")==FALSE || is.numeric(vars[v])){
-        ##TODO I'd like to make an autocorrect for this so we can just include numeric values.
-        stop("!> Insufficient data from variables to detect table_id. Please format variables in tableID+num_var format (i.e. `B01001_001`.")
-      }
-      tids <- stringr::str_split(vars[v],"_")
-      tids <- unlist(tids)[1]
-      tid <- c(tid,tids)
-      if(test==FALSE && verbose==TRUE && length(vars)>1)setTxtProgressBar(pb, v)
-    }
-  }else{
-    tid <- vapply(strsplit(vars,"_",fixed=TRUE),`[`,1,FUN.VALUE=character(1))
-  }
-  if(test==FALSE && verbose==TRUE && length(vars)>1)close(pb)
-  # Check for errors
-  # utid <- unique(tid)
-  # for(t in 1:length(utid)){
-  #   print(utid)
-  #   tidt <- tableID_pre_check(utid[t])
-  #   if(tidt[1]=="NOTFOUND"){
-  #     ##ADDTEST
-  #     stop("!> Malformed or unavailable table ID. Please correct.")
-  #   }
-  # }
-  return(tid)
 }
 
 # segregationMeasures -------------------------
@@ -2491,12 +2466,114 @@ summarize_data <- function(data=NULL,
   # return(data)
 }
 
+# tableID_variable_pre_post_check ------------------------
+## Combining former functions into a streamlined check and formatting functionality. 
+
+tableID_variable_preflight <- function(tableID = NULL,
+                                       variables = NULL,
+                                       censusVars = NULL,
+                                       verbose = FALSE){
+  
+  if(is.null(censusVars)){
+    stop("!> No census variables provided.")
+  }
+  
+  ## Check to make sure tableID exists in supplied censusVars directory.
+  if(!is.null(tableID)){
+    bumlist <- c()
+    directory <- censusVars$groups$table_id
+    for(i in 1:length(tableID)){
+      if(!(tableID[i] %in% directory)){
+        bumlist <- c(bumlist,tableID[i])
+      }
+    }
+    if(length(bumlist)>0){
+      stop(paste("!> It looks like you have malformed tableIDs: `",
+                 paste(bumlist,collapse="`, `"),
+                 ifelse(length(bumlist)>1,"` do","` does"),
+                 "` don't appear to be in the census variables provided.",sep=""))
+    }else{
+      if(verbose==T)message("Supplied tableIDs all clear.")
+    }
+    
+  }
+  
+  if(!is.null(variables)){
+    ## Figure out what kind of variable input we're dealing with. If numeric alone
+    ## is supplied, with single tableID, then format. 
+    vartypelist <- c()
+    newvars <- c()
+    for(i in 1:length(variables)){
+      v <- variable_typer(variables[i])
+      vartypelist <- c(vartypelist,v)
+      if(v=="D" & !is.null(tableID) & length(tableID==1)){
+        n <- paste(tableID,"_",sprintf("%03d",as.numeric(variables[i])),sep="")
+        newvars <- c(newvars,n)
+      }else{
+        newvars <- c(newvars,variables[i])
+      }
+    }
+    variables <- newvars
+    
+    # Extract tableID if not supplied, as long as we have variables w/ prefix
+    if(is.null(tableID) & length(unique(vartypelist))==1){
+      if(unique(vartypelist)=="A"){
+        tableID <- unique(unlist(lapply(variables, function(x) strsplit(x,"_")[[1]][1])))
+      }
+    }
+    
+    # Check for variables that don't exist in directory
+    bumlist <- c()
+    directory <- censusVars$variables$name
+    for(i in 1:length(variables)){
+      if(!(variables[i] %in% directory)){
+        bumlist <- c(bumlist,variables[i])
+      }
+    }
+    if(length(bumlist)>0){
+      stop(paste("!> It looks like you have malformed variables: `",
+                 paste(bumlist,collapse="`, `"),
+                 ifelse(length(bumlist)>1,"` do","` does"),
+                 " not appear in the census variables provided.",sep=""))
+    }else{
+      if(verbose==T)message("Supplied variables all clear.")
+    }
+  }
+  
+  # If requested, add all variables from tableID.
+  if((is.null(variables) || length(variables)==1 && variables=="all")){ 
+    if(is.null(tableID)){
+      stop("!> To add all variables, you need to provide a tableID.")
+    }else{
+      variables <- (censusVars$variables %>% filter(table_id %in% tableID))$name
+    }
+  }
+  
+  # Check for variable/tableID mismatch
+  vartids <- unique(unlist(lapply(variables, function(x) strsplit(x,"_")[[1]][1])))
+  for(i in 1:length(vartids)){
+    if(!(vartids[i] %in% tableID)){
+      stop("!> tableID and variable mismatch. Check parameters and retry.")
+    } 
+  }
+  
+  ## Format variables for API submission
+  formattedvariables <- c(paste(variables,"E",sep=""),paste(variables,"M",sep=""))
+  variables <- formattedvariables
+  
+ return(list(tableID = tableID,
+             variables = variables))
+  
+}
+
 # tableID_pre_check--------------------------------------
 # Table Profile selection
 tableID_pre_check <- function(x=NULL,
                               cvMatch=FALSE,
-                              censusVars=NULL){
-  if(cvMatch==FALSE){
+                              censusVars=NULL,
+                              pums=FALSE){
+ if(pums==FALSE){
+   if(cvMatch==FALSE){
     if(is.null(x)){
       z <- c("NO_TABLE_ID","CHECK")
     }else{
@@ -2530,6 +2607,14 @@ tableID_pre_check <- function(x=NULL,
   }else{
     return(match(x,censusVars[[1]]$table_id))
   }
+ }else{
+   z <- list()
+   for(i in 1:length(x)){
+     zz <- c("PUMS","PUMS")
+     z <- append(z,zz)
+   }
+   return(z)
+ }
 }
 
 # theme_censusprofiler --------------
@@ -2807,59 +2892,20 @@ variable_builder <- function(tableID=NULL,
   return(x)
 }
 
-# variable_formatter--------------------------------------
-variable_formatter <- function(var=NULL,
-                               tipc=NULL,
-                               tableID=NULL,
-                               censusVars=NULL){
-  # tipc needs to be a tableID_pre_check object
-  if(!is.numeric(var)){ # Check for numeric/badly formed mixed vars
-    # Do variable testing.
-    #variable_pre_check(var,tipc)
-    tids <- pseudo_tableID(var)
-    for(a in 1:length(tids)){
-      tippt <- tableID_pre_check(tids[a])
-      tipptm <- tableID_pre_check(tids[a],cvMatch = TRUE,censusVars=censusVars)
-      tippt <- tippt[1]
-      if(tippt=="NOTFOUND"){
-        stop(paste("!> There is no table ID for `",tids[a],"` Check for typos.",sep=""))
-      }
-      if(is.na(tipptm)){
-        stop(paste("!> There is no table ID for `",tids[a],"` Check for typos.",sep=""))
-      }
-    }
-    # Did we pass the tests? Include.
-    x <- var
-  }else{ # Numeric only
-    x <- paste(tableID,"_",sprintf("%03d",as.numeric(var)),sep="")
-  }
-  x <- c(paste(x,"E",sep=""),paste(x,"M",sep=""))
-  return(x)
+# variable_typer--------------------
+variable_typer <- function(variable){
+ x <- case_when(
+    grepl("_",variable)==TRUE ~ "A",
+    grepl("[a-z]",variable,ignore.case = T)==TRUE & 
+      grepl("[0-9]",variable,ignore.case = T)==TRUE ~ "B",
+    grepl("[a-z]",variable,ignore.case = T)==TRUE & 
+      grepl("[0-9]",variable,ignore.case = T)==FALSE ~ "C",
+    grepl("[a-z]",variable,ignore.case = T)==FALSE & 
+      grepl("[0-9]",variable,ignore.case = T)==TRUE ~ "D",
+    .default = "E"
+  )
+ return(x)
 }
-
-# variable_pre_check--------------------------------------
-# Variable construction checks
-variable_pre_check <- function(var=NULL,tipc=NULL){
-  if(is.null(tipc))stop("You must include a tipc argument in variable_pre_check().")
-  ## tipc must be a tableID_pre_check object
-  if(tipc[1]=="NO_TABLE_ID"){
-    t <- tableID_pre_check(var)
-    u <- grepl("_",var)
-    if(t[1]=="NOTFOUND" || u==FALSE){
-      stop(paste("!> `",var,"` is malformed. Check variable and try again.",sep=""))
-    }
-  }
-  if(tipc[1]=="NOTFOUND"){ # Did we misspecify tableID in variable?
-    stop(paste("!> It looks like `",var,"` is a malformed variable. Check for typos.",sep=""))
-    # }else if(tipc[1]!=pseudo_tableID(var)){ # Did we mismatch variable / tableID?
-    #   stop("!> It looks like you have a tableID / variable mismatch.")
-  }else if(grepl("_",var)==FALSE){
-    stop(paste("!> Wrong format for `",var,"`. Variables are either simple numeric c(1,2,3) / c(001,002,003) or in format of `B01001_001`.",sep=""))
-  }else{
-    return(1)
-  }
-}
-
 
 # varInputCheck---------------------
 varInputCheck <- function(tableID = NULL,
@@ -3326,3 +3372,77 @@ dummy <- function(x){
 #'     processEntropy(data,return=TRUE,verbose=verbose)
 #'   }
 #' }
+# 
+# # pseudo_tableID--------------------------------------
+# pseudo_tableID <- function(vars,
+#                            fast=FALSE,
+#                            test=FALSE,
+#                            verbose=FALSE){
+#   tid <- NULL
+#   if(test==FALSE && verbose==TRUE && length(vars)>1)pb <- txtProgressBar(min = 1, max = length(vars), style = 3)
+#   if(fast==FALSE){
+#     for(v in 1:length(vars)){
+#       if(str_detect(vars[v],"_")==FALSE || is.numeric(vars[v])){
+#         ##TODO I'd like to make an autocorrect for this so we can just include numeric values.
+#         stop("!> Insufficient data from variables to detect table_id. Please format variables in tableID+num_var format (i.e. `B01001_001`.")
+#       }
+#       tids <- stringr::str_split(vars[v],"_")
+#       tids <- unlist(tids)[1]
+#       tid <- c(tid,tids)
+#       if(test==FALSE && verbose==TRUE && length(vars)>1)setTxtProgressBar(pb, v)
+#     }
+#   }else{
+#     tid <- vapply(strsplit(vars,"_",fixed=TRUE),`[`,1,FUN.VALUE=character(1))
+#   }
+#   if(test==FALSE && verbose==TRUE && length(vars)>1)close(pb)
+#   # Check for errors
+#   # utid <- unique(tid)
+#   # for(t in 1:length(utid)){
+#   #   print(utid)
+#   #   tidt <- tableID_pre_check(utid[t])
+#   #   if(tidt[1]=="NOTFOUND"){
+#   #     ##ADDTEST
+#   #     stop("!> Malformed or unavailable table ID. Please correct.")
+#   #   }
+#   # }
+#   return(tid)
+# }
+# 
+# # variable_formatter--------------------------------------
+# variable_formatter <- function(var=NULL,
+#                                tipc=NULL,
+#                                tableID=NULL,
+#                                censusVars=NULL){
+#   # tipc needs to be a tableID_pre_check object
+#   if(!is.numeric(var)){ # Check for numeric/badly formed mixed vars
+#     # Do variable testing.
+#     tvp <- tableID_variable_preflight(var,tableID,censusVars = CV)
+#     tableID <- tvp$tableID
+#     variables <- tvp$variables
+#     
+#     return(variables)
+#   }
+
+
+# # variable_pre_check--------------------------------------
+# # Variable construction checks
+# variable_pre_check <- function(var=NULL,tipc=NULL){
+#   if(is.null(tipc))stop("You must include a tipc argument in variable_pre_check().")
+#   ## tipc must be a tableID_pre_check object
+#   if(tipc[1]=="NO_TABLE_ID"){
+#     t <- tableID_pre_check(var)
+#     u <- grepl("_",var)
+#     if(t[1]=="NOTFOUND" || u==FALSE){
+#       stop(paste("!> `",var,"` is malformed. Check variable and try again.",sep=""))
+#     }
+#   }
+#   if(tipc[1]=="NOTFOUND"){ # Did we misspecify tableID in variable?
+#     stop(paste("!> It looks like `",var,"` is a malformed variable. Check for typos.",sep=""))
+#     # }else if(tipc[1]!=pseudo_tableID(var)){ # Did we mismatch variable / tableID?
+#     #   stop("!> It looks like you have a tableID / variable mismatch.")
+#   }else if(grepl("_",var)==FALSE){
+#     stop(paste("!> Wrong format for `",var,"`. Variables are either simple numeric c(1,2,3) / c(001,002,003) or in format of `B01001_001`.",sep=""))
+#   }else{
+#     return(1)
+#   }
+# }

@@ -133,7 +133,7 @@ build_map <- function(mapDF=NULL,
           {if(nrow(water)>0){
             tmap::tm_shape(water) +
               tmap::tm_polygons(col="#BFE7E1") }}}} + 
-        {if((areaOnly==FALSE && !is.null(filterAddress)) | radiusOnly==TRUE){
+        {if((areaOnly==FALSE && !is.null(filterAddress)) || radiusOnly==TRUE){
           tmap::tm_shape(ggrObject$buffer) +
             tmap::tm_borders("darkred",lwd=1) +
             tmap::tm_shape(ggrObject$coordinates) +
@@ -1104,7 +1104,6 @@ get_geocode_radius <- function(filterAddress=NULL,
   if(!is.null(county)){
     ctymerge <- NULL
     for(i in 1:length(county)){
-      print(is.numeric(county))
       if((inherits(geo_counties$COUNTYFP,"character")==TRUE || 
           inherits(geo_tracts$COUNTYFP,"character")==TRUE ||   
           inherits(geo_blocks$COUNTYFP,"character")==TRUE) && 
@@ -1114,7 +1113,7 @@ get_geocode_radius <- function(filterAddress=NULL,
     }
     county <- ctymerge
   }
-  
+
   if(verbose==TRUE)message(paste("    -ggr--Fetching geos took ",round(difftime(Sys.time(),st,units = "sec"),2),"  speed up by saving to env."))
   st <- Sys.time()
   
@@ -1271,7 +1270,7 @@ get_geocode_radius <- function(filterAddress=NULL,
         geo_counties <- geo_counties %>% 
           filter(STATEFP==statefp & 
                    (COUNTYFP %in% county | NAME %in% county | NAMELSAD %in% county))
-        countyfp <- geo_counties$COUNTYFP
+        countyfp <- geo_counties
       }else{
         countyfp <- NULL
         stop("!> No state supplied. County will therefore be ambiguous.")
@@ -1343,7 +1342,8 @@ get_geocode_radius <- function(filterAddress=NULL,
       CT <- geo_states
     }
     if(!is.null(countyfp)){
-      for(i in 1:nrow(countyfp)){
+      
+      for(i in 1:length(countyfp)){
         if(i<2){
           stfp <- as.character(sf::st_drop_geometry(countyfp[i,"STATEFP"]))
           ctfp <- as.character(sf::st_drop_geometry(countyfp[i,"COUNTYFP"]))
@@ -1497,6 +1497,7 @@ get_geocode_radius <- function(filterAddress=NULL,
       if(geography=="place"){
         df <- append(df,list(places = CT$PLACEFP))
       }
+      if(!is.null(filterAddress))df <- append(df,list(buffer = buffer))
       if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
     }
     
