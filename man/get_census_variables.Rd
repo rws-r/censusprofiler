@@ -11,6 +11,7 @@ get_census_variables(
   dataset_last = NULL,
   detailed_tagging = FALSE,
   directory = FALSE,
+  raw = FALSE,
   verbose = FALSE
 )
 }

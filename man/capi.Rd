@@ -28,6 +28,7 @@ capi(
   consolidatedCity = NULL,
   region = NULL,
   division = NULL,
+  puma = NULL,
   dataset_main = "acs",
   dataset_sub = "acs5",
   dataset_last = NULL,
@@ -91,6 +92,8 @@ of tracts, block_groups or other geography from. Options are currently
 
 \item{division}{Input (abb. or FIPS) of division for search.}
 
+\item{puma}{Input (abb. or FIPS) of puma (public use microdata area) for search.}
+
 \item{dataset_main}{Selection parameters for get_census_variables (e.g. "acs")}
 
 \item{dataset_sub}{Selection parameters for get_census_variables (e.g. "acs5")}
@@ -103,7 +106,7 @@ of tracts, block_groups or other geography from. Options are currently
 
 \item{profile}{Logical parameter to specify whether to build profile.}
 
-\item{fast}{Internal parameter for pseudo_tableID and stat table}
+\item{fast}{Internal parameter for stat table}
 
 \item{simpleReturn}{Param to return raw data, not formatted.}
 

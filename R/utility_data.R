@@ -320,54 +320,78 @@ get_census_variables <- function(year=NULL,
                                  dataset_last=NULL,
                                  detailed_tagging=FALSE,
                                  directory=FALSE,
+                                 raw=FALSE,
                                  verbose=FALSE
 ){
   
   dt <- name <- concept <- NULL
   
   if(directory==FALSE){ 
-    url <- "http://api.census.gov"
-    pathElements <- c("data",year,dataset_main,dataset_sub,dataset_last,"variables")
-    path <- paste(pathElements,collapse="/")
-    cv <- httr::GET(url,
-                    path=path)
+    baseurl <- "http://api.census.gov"
+    pathElements <- c(baseurl,"data",year,dataset_main,dataset_sub,dataset_last,"variables.json")
+    path <- httr2::request(paste(pathElements,collapse="/"))
     
-    if(httr::status_code(cv)!=200){
-      stop(paste("!> There was an error in the GET call / json text. ERROR",httr::status_code(dt)))
+    tryCatch(
+      {
+        cv <- httr2::req_perform(path)
+      },
+      error=function(e){
+        if(grepl("404",simpleError(e))==TRUE){
+          message("404 Not Found. It's likely that you have specified a dataset / year combination that does not exist.")
+        }else{
+          print(simpleError(e))
+        }
+      },
+      warning = function(w){
+        print(w)
+      }
+    )
+    
+    cv <- httr2::resp_body_json(cv)
+    
+    ## Shape json data.
+    cv <- tibble::tibble(cvdata = cv) %>% tidyr::unnest_longer(cvdata) %>% 
+      tidyr::unnest_wider(cvdata)
+    
+    # Filter out header data
+    cv <- cv[!(cv$predicateType %in% c("fips-for","fips-in","ucgid")),]
+    
+    ## Some datasets have text NAs, rather than standard. Clear them.
+    cv[cv=="N/A"] <- NA
+    
+    if("values" %in% names(cv)){
+      cv <- cv %>% tidyr::unnest_longer(values,indices_to = "values_type") 
     }
+    
+    # Sort
+    cv <- cv[order(cv$cvdata_id),]
     
     if(verbose==TRUE)message(paste("Cleaning data and formatting to dataframe..."))
-    
-    cv <- httr::content(cv,as="text")
-    cv <- jsonlite::fromJSON(cv)
-    cv <- as.data.frame(cv)
-    colnames(cv) <- cv[1,]
-    cv <- cv[-1,]
 
+    if(raw==TRUE)return(cv)
+    
     if(verbose==TRUE)message(paste("Reshaping data..."))
-    ## Filter out the extraneous rows.
-    if(grepl("acs",dataset_main,ignore.case = TRUE)==TRUE){
-      if(is.null(dataset_last)){
-        cv <- cv[grepl("Estimate!!*",cv$label)==TRUE,]  
-      }
-    }else{
-      cv <- subset(cv,grepl("!!Total*",cv$label) | 
-                     grepl("!!Median*",cv$label))
-    }
+    ## Determine table type. Some include variables with `!!` that separate out
+    ## levels. Others are simple variables. Types are complex and simple.
     
-    ## Sort by ascending `name`
-    cv <- cv[order(cv$name),]
-    
-    if(!is.null(dataset_last)){
-      #cv <- data.frame(name=cv$name,label=cv$label,concept=cv$concept)
-      cv <- cv %>% mutate(var_type = variable_typer(name))
-      return(cv)
-    }else{
-      ## Clean up variable names
-      cv$name <- substr(cv$name,1,nchar(cv$name)-1)
+    if(TRUE %in% unique(grepl("!!",cv$label))){
+      #cv <- cv[grepl("!!",cv$label)==TRUE,]
+      cv$label <- substr(cv$label,1,nchar(cv$label)-1)
       
       ## Add nice extra info.
-      cv <- cv %>% dplyr::mutate(table_id=gsub('(_*?)_.*','\\1',name),
+      # Rename group to table_id if exists.
+      if(!all(is.na(cv$group))){
+        names(cv)[names(cv)=="group"] <- "table_id"
+      }
+      
+      cv <- cv %>% dplyr::mutate(name = ifelse(grepl("[a-z]",
+                                                     substr(cv$cvdata_id,
+                                                            nchar(cv$cvdata_id),
+                                                            nchar(cv$cvdata_id)),ignore.case=T)==T,
+                                               substr(cv$cvdata_id,
+                                                      1,
+                                                      nchar(cv$cvdata_id)-1),
+                                               cv$cvdata_id),
                                  varID=gsub(".*_","",name),
                                  calculation = dplyr::case_when(
                                    stringr::str_detect(concept,"(?i)MEDIAN")==TRUE ~ "median",
@@ -388,8 +412,10 @@ get_census_variables <- function(year=NULL,
                                    str_count(label,"!!") > 1 ~ "vars",
                                    .default = "other"
                                  ),
-                                 var_type = variable_typer(name)
-                                 )
+                                 var_type = variable_typer(name))
+
+      ## Select relevant columns
+      cv <- cv[,c("name","label","concept","table_id","attributes","varID","calculation","type","type_base","var_type")]
       
       if(detailed_tagging==TRUE){
         if(verbose==TRUE)message("     Creating detailed tagging...")
@@ -422,10 +448,26 @@ get_census_variables <- function(year=NULL,
       }
       
       cvt <- unique(cv[c("table_id","concept","calculation")])
-      cvlist <- list(variables = cv, groups = cvt)
+    }else{
+      cv <- cv %>% mutate(name = cvdata_id)
+      nms <- c()
+      for(i in 1:length(names(cv))){
+        if(names(cv)[i] %in% c("name","label","concept","group","suggested-weight","values","values_type","is-weight","var_type")){
+          nms <- c(nms,names(cv)[i])
+        }
+      }
       
-      return(cvlist)
+      # Select columns and relocate `name` to front
+      cv <- cv[,c("name",nms[nms!="name"])]
+            
+      cv <- cv %>% mutate(var_type = variable_typer(name))
+      cvt <- unique(cv[c("name","label")])
     }
+    
+    cvlist <- list(variables = cv, 
+                   groups = cvt)
+    
+    return(cvlist)
     
   }else{
     url <- "http://api.census.gov"
@@ -2473,6 +2515,8 @@ tableID_variable_preflight <- function(tableID = NULL,
                                        variables = NULL,
                                        censusVars = NULL,
                                        verbose = FALSE){
+  #TODO
+  #incorporate checks to use pums data
   
   if(is.null(censusVars)){
     stop("!> No census variables provided.")
@@ -2481,7 +2525,10 @@ tableID_variable_preflight <- function(tableID = NULL,
   ## Check to make sure tableID exists in supplied censusVars directory.
   if(!is.null(tableID)){
     bumlist <- c()
-    directory <- censusVars$groups$table_id
+    ifelse("table_id" %in% names(censusVars$variables),
+                        directory <- censusVars$variables$table_id,
+                        directory <- censusVars$variables$name)
+
     for(i in 1:length(tableID)){
       if(!(tableID[i] %in% directory)){
         bumlist <- c(bumlist,tableID[i])
@@ -2495,7 +2542,10 @@ tableID_variable_preflight <- function(tableID = NULL,
     }else{
       if(verbose==T)message("Supplied tableIDs all clear.")
     }
-    
+  }
+  
+  if(!("table_id" %in% names(censusVars$variables)) & is.null(tableID)){
+    tableID <- variables
   }
   
   if(!is.null(variables)){
@@ -2539,82 +2589,33 @@ tableID_variable_preflight <- function(tableID = NULL,
       if(verbose==T)message("Supplied variables all clear.")
     }
   }
-  
-  # If requested, add all variables from tableID.
-  if((is.null(variables) || length(variables)==1 && variables=="all")){ 
-    if(is.null(tableID)){
-      stop("!> To add all variables, you need to provide a tableID.")
-    }else{
-      variables <- (censusVars$variables %>% filter(table_id %in% tableID))$name
-    }
-  }
-  
-  # Check for variable/tableID mismatch
-  vartids <- unique(unlist(lapply(variables, function(x) strsplit(x,"_")[[1]][1])))
-  for(i in 1:length(vartids)){
-    if(!(vartids[i] %in% tableID)){
-      stop("!> tableID and variable mismatch. Check parameters and retry.")
-    } 
-  }
-  
-  ## Format variables for API submission
-  formattedvariables <- c(paste(variables,"E",sep=""),paste(variables,"M",sep=""))
-  variables <- formattedvariables
-  
- return(list(tableID = tableID,
-             variables = variables))
-  
-}
 
-# tableID_pre_check--------------------------------------
-# Table Profile selection
-tableID_pre_check <- function(x=NULL,
-                              cvMatch=FALSE,
-                              censusVars=NULL,
-                              pums=FALSE){
- if(pums==FALSE){
-   if(cvMatch==FALSE){
-    if(is.null(x)){
-      z <- c("NO_TABLE_ID","CHECK")
-    }else{
-      z <- list()
-      for(i in 1:length(x)){
-        num <- as.character(c(0:9))
-        zi <- dplyr::case_when(
-          stringr::str_starts(x[i],"B") & 
-            stringr::str_sub(x[i],2,2) %in% num ~ c("B",""),           # Detailed Tables: Base Table
-          stringr::str_starts(x[i],"CP") & 
-            stringr::str_sub(x[i],3,3) %in% num~ c("CP","cprofile"), # Comparison Profile
-          stringr::str_starts(x[i],"C") &
-            stringr::str_sub(x[i],2,2) %in% num ~ c("C",""),           # Detailed Tables: Collapsed Table
-          stringr::str_starts(x[i],"S") & 
-            stringr::str_sub(x[i],2,2) %in% num ~ c("S","subject"),    # Subject Table
-          stringr::str_starts(x[i],"DP") & 
-            stringr::str_sub(x[i],3,3) %in% num~ c("DP","profile"),  # Data Profile
-          stringr::str_starts(x[i],"S0201") &
-            stringr::str_sub(x[i],6,6) %in% num ~ c("S0201","spp"),# Selected Population Profile
-          #stringr::str_starts(x,"R") ~ "",    # Ranking Table (TODO this and below exist, but can't find them rn)
-          #stringr::str_starts(x,"GCT") ~ "",  # Geographic Comparison Table
-          #stringr::str_starts(x,"K20") ~ "",  # Supplemental Table
-          #stringr::str_starts(x,"XK") ~ "",   # Experimental Estimates
-          #stringr::str_starts(x,"NP") ~ "",   # Narrative Profile
-          .default = c("NOTFOUND","ERROR")
-        )
-        z <- append(z,zi)
+  if("table_id" %in% names(censusVars$variables)){
+    # If requested, add all variables from tableID.
+    if((is.null(variables) || length(variables)==1 && variables=="all")){ 
+      if(is.null(tableID)){
+        stop("!> To add all variables, you need to provide a tableID.")
+      }else{
+        variables <- (censusVars$variables %>% filter(table_id %in% tableID))$name
       }
     }
-    return(z)
-  }else{
-    return(match(x,censusVars[[1]]$table_id))
+    
+    # Check for variable/tableID mismatch
+    vartids <- unique(unlist(lapply(variables, function(x) strsplit(x,"_")[[1]][1])))
+    for(i in 1:length(vartids)){
+      if(!(vartids[i] %in% tableID)){
+        stop("!> tableID and variable mismatch. Check parameters and retry.")
+      } 
+    }
+    
+    ## Format variables for API submission
+    formattedvariables <- c(paste(variables,"E",sep=""),paste(variables,"M",sep=""))
+    variables <- formattedvariables
   }
- }else{
-   z <- list()
-   for(i in 1:length(x)){
-     zz <- c("PUMS","PUMS")
-     z <- append(z,zz)
-   }
-   return(z)
- }
+  
+  return(list(tableID = tableID,
+              variables = variables))
+  
 }
 
 # theme_censusprofiler --------------
@@ -3444,5 +3445,56 @@ dummy <- function(x){
 #     stop(paste("!> Wrong format for `",var,"`. Variables are either simple numeric c(1,2,3) / c(001,002,003) or in format of `B01001_001`.",sep=""))
 #   }else{
 #     return(1)
+#   }
+# # }
+
+# # tableID_pre_check--------------------------------------
+# # Table Profile selection
+# tableID_pre_check <- function(x=NULL,
+#                               cvMatch=FALSE,
+#                               censusVars=NULL,
+#                               pums=FALSE){
+#   if(pums==FALSE){
+#     if(cvMatch==FALSE){
+#       if(is.null(x)){
+#         z <- c("NO_TABLE_ID","CHECK")
+#       }else{
+#         z <- list()
+#         for(i in 1:length(x)){
+#           num <- as.character(c(0:9))
+#           zi <- dplyr::case_when(
+#             stringr::str_starts(x[i],"B") & 
+#               stringr::str_sub(x[i],2,2) %in% num ~ c("B",""),           # Detailed Tables: Base Table
+#             stringr::str_starts(x[i],"CP") & 
+#               stringr::str_sub(x[i],3,3) %in% num~ c("CP","cprofile"), # Comparison Profile
+#             stringr::str_starts(x[i],"C") &
+#               stringr::str_sub(x[i],2,2) %in% num ~ c("C",""),           # Detailed Tables: Collapsed Table
+#             stringr::str_starts(x[i],"S") & 
+#               stringr::str_sub(x[i],2,2) %in% num ~ c("S","subject"),    # Subject Table
+#             stringr::str_starts(x[i],"DP") & 
+#               stringr::str_sub(x[i],3,3) %in% num~ c("DP","profile"),  # Data Profile
+#             stringr::str_starts(x[i],"S0201") &
+#               stringr::str_sub(x[i],6,6) %in% num ~ c("S0201","spp"),# Selected Population Profile
+#             #stringr::str_starts(x,"R") ~ "",    # Ranking Table (TODO this and below exist, but can't find them rn)
+#             #stringr::str_starts(x,"GCT") ~ "",  # Geographic Comparison Table
+#             #stringr::str_starts(x,"K20") ~ "",  # Supplemental Table
+#             #stringr::str_starts(x,"XK") ~ "",   # Experimental Estimates
+#             #stringr::str_starts(x,"NP") ~ "",   # Narrative Profile
+#             .default = c("NOTFOUND","ERROR")
+#           )
+#           z <- append(z,zi)
+#         }
+#       }
+#       return(z)
+#     }else{
+#       return(match(x,censusVars[[1]]$table_id))
+#     }
+#   }else{
+#     z <- list()
+#     for(i in 1:length(x)){
+#       zz <- c("PUMS","PUMS")
+#       z <- append(z,zz)
+#     }
+#     return(z)
 #   }
 # }

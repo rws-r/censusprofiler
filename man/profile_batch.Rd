@@ -93,7 +93,7 @@ of tracts, block_groups or other geography from. Options are currently
 
 \item{test}{Internal parameter for testing suite.}
 
-\item{fast}{Internal parameter for pseudo_tableID and stat table (capi())}
+\item{fast}{Internal parameter for stat table (capi())}
 
 \item{verbose}{Logical parameter to specify whether to produce verbose output.}
 

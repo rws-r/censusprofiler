@@ -25,6 +25,7 @@
 #' @param consolidatedCity Input (abb. or FIPS) of consolidated city for search.
 #' @param region Input (abb. or FIPS) of region for search.
 #' @param division Input (abb. or FIPS) of division for search.
+#' @param puma Input (abb. or FIPS) of puma (public use microdata area) for search.
 #' @param dataset_main Selection parameters for get_census_variables (e.g. "acs")
 #' @param dataset_sub Selection parameters for get_census_variables (e.g. "acs5")
 #' @param dataset_last Selection parameters for get_census_variables (e.g. "cprofile")
@@ -87,6 +88,7 @@ capi <- function(year=NULL,
                  consolidatedCity=NULL,
                  region=NULL,
                  division=NULL,
+                 puma=NULL,
                  dataset_main="acs",
                  dataset_sub="acs5",
                  dataset_last=NULL,
@@ -175,8 +177,16 @@ capi <- function(year=NULL,
   }
   
   if(!is.null(dataset_last)){
-    if(dataset_last=="pums" & !(geography %in% c("region","division","state"))){
-      stop(paste("!> ",geography," is not an acceptable geography for pums data. Use region, division, or state.",sep=""))
+    if(dataset_last=="pums"){
+      if(!(geography %in% c("puma","region","division","state"))){
+        stop(paste("!> ",geography," is not an acceptable geography for pums data. Use region, division, or state.",sep=""))
+      }
+      if(!is.null(puma) & geography!="puma"){
+        stop("!> To select PUMs area by PUM id, please select geography=puma.")
+      }
+      if(geography=="puma" & dataset_sub!="acs1"){
+        stop("!> PUMAs require ACS 1-year data.")
+      }
     }
   }
 
@@ -481,6 +491,12 @@ capi <- function(year=NULL,
      }else{
        metro <- stringr::str_flatten(unique(metro),collapse=",")
      }
+    if(!is.null(puma)){
+      if(length(puma)>1){
+        puma <- paste(puma,collapse=",")
+      }
+    }
+    
   }
 
 # Prepare API Call --------------------------------------------------------
@@ -497,6 +513,7 @@ capi <- function(year=NULL,
      
      ## Loops to handle multiple counties
      datac <- NULL
+
      for(i in 1:length(county)){ 
        
        ingeo <- NULL
@@ -526,6 +543,9 @@ capi <- function(year=NULL,
          ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
          forgeo <- paste("place:",place,sep="")
          ingeo <- paste("state:",state,sep="")
+       }else if(geography=="puma"){
+         forgeo <- "public use microdata area:*"
+         ingeo <- paste("state:",state,sep="")
        }else if(geography=="consolidated city"){
          ##TODO Update get_geo_radius() / geo_var_builder() to account for this geography.
          # forgeo <- paste("consolidated city")
@@ -543,7 +563,20 @@ capi <- function(year=NULL,
        }
 
        ## Make GET Call -----------------------------------------------------------
-       if(verbose==TRUE)message(paste(dur(st),"GET CALL: ",url,path,"?get=",paste(varlist,",NAME",sep=""),"&for=",forgeo,"&in=",ingeo,sep=""))
+       if(verbose==TRUE){
+         message(paste(dur(st),
+                       "GET CALL: ",
+                       url,
+                       path,
+                       "?get=",
+                       paste(varlist,
+                             ifelse(CV$type=="simple" | !is.null(puma),"",",NAME"),
+                             sep=""),
+                       "&for=",
+                       forgeo,
+                       ifelse(CV$type=="complex" | geography=="puma","&in=",""),
+                       ifelse(CV$type=="complex" | geography=="puma",ingeo,""),
+                       sep=""))}
        
        if(verbose==TRUE)message(paste(dur(st),"Initiate GET call..."))
        
@@ -555,14 +588,18 @@ capi <- function(year=NULL,
            
            dt <- httr::GET(url,
                            path=path,
-                           query=list(get = paste(varlist[d],",NAME",sep=""),
+                           query=list(get = paste(varlist[d],
+                                                  ifelse(CV$type=="simple" | geography=="puma","",",NAME"),
+                                                  sep=""),
                                       "for" = forgeo,
                                       key = CENSUS_API_KEY)
            )
          }else{
            dt <- httr::GET(url,
                            path=path,
-                           query=list(get = paste(varlist[d],",NAME",sep=""),
+                           query=list(get = paste(varlist[d],
+                                                  ifelse(CV$type=="simple" | geography=="puma","",",NAME"),
+                                                  sep=""),
                                       "for" = forgeo,
                                       "in" = ingeo,
                                       key = CENSUS_API_KEY)
@@ -581,6 +618,12 @@ capi <- function(year=NULL,
          colnames(dt) <- dt[1,]
          dt <- dt[-1,]
          
+         if(geography=="puma"){
+           dt$index <- 1:nrow(dt)
+           dt <- dt %>% relocate(index,.before = "state")
+           names(dt)[names(dt)=="public use microdata area"] <- "puma"
+         }
+      
          if(verbose==TRUE)message(paste(dur(st),"Reshaping data..."))
          dt <- tidyr::pivot_longer(dt,cols=1:chunksizes[d],names_to="variable")
          
@@ -639,6 +682,8 @@ capi <- function(year=NULL,
       data <- data %>% dplyr::mutate(geoid = paste(state,county,tract,sep=""))
     }else if(geography=="block group"){
       data <- data %>% dplyr::mutate(geoid = paste(state,county,tract,block_group,sep=""))
+    }else if(geography=="puma"){
+      data <- data %>% dplyr::mutate(geoid = paste(state,puma,sep=""))
     }else{
       data <- data %>% dplyr::mutate(geoid = NA)
     }
@@ -646,137 +691,173 @@ capi <- function(year=NULL,
     ### If filterAddress and filterByGeoType, perform data filtering now-------
     if(verbose==TRUE)message("Filtering data...")
     if((!is.null(filterAddress) | !is.null(filterByGeoType)) & (geography=="tract") || geography=="block group"){
-        data <- data[data$geoid %in% ggr$geoid,]
+        if(!is.null(ggr$geoid)){
+          data <- data[data$geoid %in% ggr$geoid,] 
+        }
+    }
+    if(!is.null(puma)){
+      puma <- sprintf("%05d",puma)
+      if(!(puma %in% data$puma)){
+        stop("!> That puma reference number does not exist in the dataset.")
+      }else{
+        data <- data[data$puma %in% puma,]
+      }
     }
 
     data$value <- as.numeric(data$value)
-    data <- data %>% dplyr::mutate(vartype = ifelse(stringr::str_sub(data$variable,-1,-1)=="E","estimate","moe"))
-    data <- data %>% dplyr::mutate(variable=stringr::str_sub(data$variable,1,-2))
-    data <- data %>% tidyr::pivot_wider(names_from = vartype,values_from = value)
-    data$estimate <- as.numeric(data$estimate)
-    data$moe <- as.numeric(data$moe)
-    data <- data %>% dplyr::mutate(estimate = ifelse(estimate %in% nas,NA,estimate),
-                                   moe = ifelse(moe %in% nas,NA,moe))
     
-    ### Add tableID--------------------------
-    if(verbose==TRUE)message(paste(dur(st),"Adding tableID..."))
-    tableID <- tableID_variable_preflight(variables=data$variable,
-                                          censusVars = CV,
-                                          verbose=verbose)
-    tableID <- tableID$tableID
-    data <- data %>% dplyr::mutate(table_id = tableID)
-    
-    ### Add Variable--------------------------
-    if(verbose==TRUE)message(paste(dur(st),"Adding variable..."))
-    data <- data %>% dplyr::rename(name = NAME)
-    data <- data %>% dplyr::arrange(name,variable)
-    
-    ### Add Year + relocate variable-------------------------- 
-    if(verbose==TRUE)message(paste(dur(st),"Adding year + relocating variable..."))
-    if(length(year)==1)data <- data %>% dplyr::mutate(year=year)
-    data <- data %>% dplyr::relocate(variable, .after = year)
-    
-    ### Add Labels + Concept ---------------------------------
-    if(verbose==TRUE)message(paste(dur(st),"Attaching variable/tableID labels..."))
-    CVV <- CV[[1]] %>% dplyr::mutate(labels = str_split_i(label,"!!",-1))
-    CVV1 <- CVV %>% dplyr::select(name,concept,labels,calculation,type,type_base,varID)
-   # CVV2 <- CVV %>% dplyr::select(name,calculation,type,type_base,varID)
-    data <- left_join(data,CVV1,by=c("variable"="name"))
-
-    ### Add Subtotals + Proportions ---------------------
-    if(verbose==TRUE)message(paste(dur(st),"Adding subtotals + proportions..."))
-    data <- data %>% dplyr::relocate(estimate,.after=labels)
-    data <- data %>% dplyr::group_by(year,table_id,geoid) %>% 
-      dplyr::mutate(subtotal=ifelse(calculation=="median" | calculation=="mean",NA,max(estimate)),
-                    pct = ifelse(calculation=="median" | calculation=="mean",NA,estimate/subtotal)) %>% 
-      dplyr::ungroup()
-    
-    data <- data %>% dplyr::group_by(year,table_id,geoid,type) %>% 
-      dplyr::mutate(subtotal_by_type=ifelse(calculation=="median" | calculation=="mean",NA,sum(estimate)),
-                    pct_by_type = ifelse(calculation=="median" | calculation=="mean",NA,estimate/subtotal_by_type),
-                    moe_pct = ifelse(calculation=="median" | calculation=="median",NA,moe/subtotal_by_type)) %>% 
-      dplyr::ungroup()
-    
-    data <- data %>% dplyr::relocate(moe,.after=pct_by_type)
-    data <- data %>% dplyr::relocate(moe_pct,.after=moe)
-    
-
-    ### Add Geographical Data ----------------
-    if(verbose==TRUE)message(paste(dur(st),"Adding geography..."))
-    data <- data %>% dplyr::relocate(name,.after=moe_pct)
-    data <- data %>% dplyr::mutate(geography=geography)
-    if("state" %in% names(data))data <- data %>% dplyr::relocate(state,.after=geography)
-    if("county" %in% names(data))data <- data %>% dplyr::relocate(county,.after=state)
-    if("tract" %in% names(data))data <- data %>% dplyr::relocate(tract,.after=county)
-    if("block_group" %in% names(data))data <- data %>% dplyr::relocate(block_group,.after=tract)
-    if("block_group" %in% names(data)){
-      data <- data %>% dplyr::relocate(geoid, .after=block_group)
-    }else if("tract" %in% names(data)){
-      data <- data %>% dplyr::relocate(geoid, .after=tract)
-    }else if("county" %in% names(data)){
-      data <- data %>% dplyr::relocate(geoid, .after=county)
-    }else if("state" %in% names(data)){
-      data <- data %>% dplyr::relocate(geoid, .after=state)
+    if(!is.null(dataset_last) && dataset_last=="pums"){
+      data <- data %>% dplyr::mutate(value = ifelse(value %in% nas,NA,value))
     }else{
-      data <- data %>% dplyr::relocate(geoid, .after=geography)
-    }
-    
-    data <- data %>% dplyr::relocate(calculation,type,type_base,varID,.after=geoid)
-    
-    if(verbose==TRUE)message(paste(dur(st),"Creating type 1 data..."))
-    data_type_1 <- data
-    data_type_1 <- data_type_1 %>% mutate(dt=1)
-    attr(data_type_1,"dataType") <- 1
-
-## Filter summaries --------------------------------------------------------
-    if(verbose==TRUE)message(paste(dur(st),"Creating type 2 data..."))
-  ## This is `type 2 data`
-    if(filterSummary==TRUE || profile==TRUE){
       
-      levels <- c("root","summary","level_1","level_2","level_3","level_4")
-      fsl <- c()
-      ## Remove bottom specified summary levels.
-      if(is.numeric(filterSummaryLevels)==TRUE){
-        for(i in 1:length(levels)){
-          if(i %in% filterSummaryLevels){
-            c(fsl,levels[i])
-          }
-        }
-      }else{
-        fsl <- filterSummaryLevels
-      }
-    
-      data_type_2 <- data_type_1 %>% filter(!(type %in% fsl))
-      data_type_2 <- data_type_2 %>% mutate(dt=2)
-      attr(data_type_2,"dataType") <- 2
+      data <- data %>% dplyr::mutate(vartype = ifelse(stringr::str_sub(data$variable,-1,-1)=="E","estimate","moe"))
+      data <- data %>% dplyr::mutate(variable=stringr::str_sub(data$variable,1,-2))
+      data <- data %>% tidyr::pivot_wider(names_from = vartype,values_from = value)
+      data$estimate <- as.numeric(data$estimate)
+      data$moe <- as.numeric(data$moe)
+      data <- data %>% dplyr::mutate(estimate = ifelse(estimate %in% nas,NA,estimate),
+                                     moe = ifelse(moe %in% nas,NA,moe))
     }
-
- ## Up to this point ^^^ is `type 1/2` data.
-  
-## Mode adjustments --------------------------------------------------------
-
-    if(verbose==TRUE)message(paste(dur(st),"Creating type 3/4 data..."))
+    
+    ### Format and add helpful data--------------------------
+    if(!is.null(dataset_last) && dataset_last=="pums"){
+      ### Add Labels + Concept ---------------------------------
+      if(verbose==TRUE)message(paste(dur(st),"Attaching variable/tableID labels..."))
+      CVV <- CV$variables %>% dplyr::select(name,label,var_type)
+      data <- left_join(data,CVV,by=c("variable"="name"))
+      
+      ## Create type_7_data (straight data)
+      if(verbose==TRUE)message(paste(dur(st),"Creating type 7 data..."))
+      data_type_7 <- data
+      data_type_7 <- data_type_7 %>% mutate(dt=7)
+      attr(data_type_7,"dataType") <- 7
+      
+      ## Create type_8_data (summary)
+      if(verbose==TRUE)message(paste(dur(st),"Creating type 8 data..."))
+      data_type_8 <- data %>% group_by(variable,value) %>% 
+        summarize(subtotal = sum(value))
+      data_type_8 <- data_type_8 %>% mutate(dt=8)
+      attr(data_type_8,"dataType") <- 8
+      
+    }else{
+      if(verbose==TRUE)message(paste(dur(st),"Adding tableID..."))
+      tableID <- tableID_variable_preflight(variables=data$variable,
+                                            censusVars = CV,
+                                            verbose=verbose)
+      tableID <- tableID$tableID
+      data <- data %>% dplyr::mutate(table_id = tableID)
+      
+      ### Add Variable--------------------------
+      if(verbose==TRUE)message(paste(dur(st),"Adding variable..."))
+      data <- data %>% dplyr::rename(name = NAME)
+      data <- data %>% dplyr::arrange(name,variable)
+      
+      ### Add Year + relocate variable-------------------------- 
+      if(verbose==TRUE)message(paste(dur(st),"Adding year + relocating variable..."))
+      if(length(year)==1)data <- data %>% dplyr::mutate(year=year)
+      data <- data %>% dplyr::relocate(variable, .after = year)
+      
+      ### Add Labels + Concept ---------------------------------
+      if(verbose==TRUE)message(paste(dur(st),"Attaching variable/tableID labels..."))
+      CVV <- CV[[1]] %>% dplyr::mutate(labels = str_split_i(label,"!!",-1))
+      CVV1 <- CVV %>% dplyr::select(name,concept,labels,calculation,type,type_base,varID)
+      # CVV2 <- CVV %>% dplyr::select(name,calculation,type,type_base,varID)
+      data <- left_join(data,CVV1,by=c("variable"="name"))
+      
+      ### Add Subtotals + Proportions ---------------------
+      if(verbose==TRUE)message(paste(dur(st),"Adding subtotals + proportions..."))
+      data <- data %>% dplyr::relocate(estimate,.after=labels)
+      data <- data %>% dplyr::group_by(year,table_id,geoid) %>% 
+        dplyr::mutate(subtotal=ifelse(calculation=="median" | calculation=="mean",NA,max(estimate)),
+                      pct = ifelse(calculation=="median" | calculation=="mean",NA,estimate/subtotal)) %>% 
+        dplyr::ungroup()
+      
+      data <- data %>% dplyr::group_by(year,table_id,geoid,type) %>% 
+        dplyr::mutate(subtotal_by_type=ifelse(calculation=="median" | calculation=="mean",NA,sum(estimate)),
+                      pct_by_type = ifelse(calculation=="median" | calculation=="mean",NA,estimate/subtotal_by_type),
+                      moe_pct = ifelse(calculation=="median" | calculation=="median",NA,moe/subtotal_by_type)) %>% 
+        dplyr::ungroup()
+      
+      data <- data %>% dplyr::relocate(moe,.after=pct_by_type)
+      data <- data %>% dplyr::relocate(moe_pct,.after=moe)
+      
+      
+      ### Add Geographical Data ----------------
+      if(verbose==TRUE)message(paste(dur(st),"Adding geography..."))
+      data <- data %>% dplyr::relocate(name,.after=moe_pct)
+      data <- data %>% dplyr::mutate(geography=geography)
+      if("state" %in% names(data))data <- data %>% dplyr::relocate(state,.after=geography)
+      if("county" %in% names(data))data <- data %>% dplyr::relocate(county,.after=state)
+      if("tract" %in% names(data))data <- data %>% dplyr::relocate(tract,.after=county)
+      if("block_group" %in% names(data))data <- data %>% dplyr::relocate(block_group,.after=tract)
+      if("block_group" %in% names(data)){
+        data <- data %>% dplyr::relocate(geoid, .after=block_group)
+      }else if("tract" %in% names(data)){
+        data <- data %>% dplyr::relocate(geoid, .after=tract)
+      }else if("county" %in% names(data)){
+        data <- data %>% dplyr::relocate(geoid, .after=county)
+      }else if("state" %in% names(data)){
+        data <- data %>% dplyr::relocate(geoid, .after=state)
+      }else{
+        data <- data %>% dplyr::relocate(geoid, .after=geography)
+      }
+      
+      data <- data %>% dplyr::relocate(calculation,type,type_base,varID,.after=geoid)
+      
+      if(verbose==TRUE)message(paste(dur(st),"Creating type 1 data..."))
+      data_type_1 <- data
+      data_type_1 <- data_type_1 %>% mutate(dt=1)
+      attr(data_type_1,"dataType") <- 1
+      
+      ## Filter summaries --------------------------------------------------------
+      if(verbose==TRUE)message(paste(dur(st),"Creating type 2 data..."))
+      ## This is `type 2 data`
+      if(filterSummary==TRUE || profile==TRUE){
+        
+        levels <- c("root","summary","level_1","level_2","level_3","level_4")
+        fsl <- c()
+        ## Remove bottom specified summary levels.
+        if(is.numeric(filterSummaryLevels)==TRUE){
+          for(i in 1:length(levels)){
+            if(i %in% filterSummaryLevels){
+              c(fsl,levels[i])
+            }
+          }
+        }else{
+          fsl <- filterSummaryLevels
+        }
+        
+        data_type_2 <- data_type_1 %>% filter(!(type %in% fsl))
+        data_type_2 <- data_type_2 %>% mutate(dt=2)
+        attr(data_type_2,"dataType") <- 2
+      }
+      
+      ## Up to this point ^^^ is `type 1/2` data.
+      
+      ## Mode adjustments --------------------------------------------------------
+      
+      if(verbose==TRUE)message(paste(dur(st),"Creating type 3/4 data..."))
       
       if(mode=="summarize" || profile==TRUE){
-          ## Deal with medians
-          data_type_3 <- data_type_1 %>% dplyr::mutate(estimate=ifelse(calculation=="median",NA,estimate))
-          data_type_3 <- data_type_3 %>% group_by(table_id,year,variable,concept,labels,calculation,type,varID) %>% 
-            summarize(estimate=if(any(calculation=="mean"))mean(estimate)
-                               else(sum(estimate)),
-                      subtotal_by_type=sum(subtotal_by_type)) %>% 
-            ungroup()
-          data_type_3 <- data_type_3 %>% 
-            group_by(table_id) %>% 
-            mutate(subtotal=if(any(calculation=="mean"))NA
-                             else(max(estimate)),
-                   pct = estimate/subtotal,
-                   pct_by_type = estimate/subtotal_by_type,
-                   dt=3) %>% 
-            ungroup()
-          
-          data_type_3 <- data_type_3 %>% relocate(estimate,subtotal, pct,subtotal_by_type,pct_by_type, .after=labels)
-          attr(data_type_3,"dataType") <- 3
-
+        ## Deal with medians
+        data_type_3 <- data_type_1 %>% dplyr::mutate(estimate=ifelse(calculation=="median",NA,estimate))
+        data_type_3 <- data_type_3 %>% group_by(table_id,year,variable,concept,labels,calculation,type,varID) %>% 
+          summarize(estimate=if(any(calculation=="mean"))mean(estimate)
+                    else(sum(estimate)),
+                    subtotal_by_type=sum(subtotal_by_type)) %>% 
+          ungroup()
+        data_type_3 <- data_type_3 %>% 
+          group_by(table_id) %>% 
+          mutate(subtotal=if(any(calculation=="mean"))NA
+                 else(max(estimate)),
+                 pct = estimate/subtotal,
+                 pct_by_type = estimate/subtotal_by_type,
+                 dt=3) %>% 
+          ungroup()
+        
+        data_type_3 <- data_type_3 %>% relocate(estimate,subtotal, pct,subtotal_by_type,pct_by_type, .after=labels)
+        attr(data_type_3,"dataType") <- 3
+        
         if(filterSummary==TRUE || profile==TRUE){
           data_type_4 <- data_type_3 %>% filter(!(type %in% fsl))
           attr(data_type_4,"dataType") <- 4
@@ -797,7 +878,7 @@ capi <- function(year=NULL,
           
         }
       }
-  
+    }
 # Finish and return -------------------------------------------------------
 
   if(verbose==TRUE)message(paste(dur(st),"Done."))
@@ -807,14 +888,23 @@ capi <- function(year=NULL,
     if(mode=="table" && filterSummary==TRUE)data <- data_type_2
     if(mode=="summarize" && filterSummary==FALSE)data <- data_type_3
     if(mode=="summarize" && filterSummary==TRUE)data <- data_type_4
+    if(mode=="table" && (!is.null(dataset_last) && dataset_last=="pums"))data <- data_type_7
+    if(mode=="summarize" && dataset_last=="pums")data <- data_type_8
     
   }else{
-    data <- list(type1data = data_type_1,
-                 type2data = data_type_2,
-                 type3data = data_type_3,
-                 type4data = data_type_4
-                 )
-    attr(data,"dataType") <- 6
+    if(dataset_last=="pums"){
+      data <- list(type7data = data_type_7,
+                   type8data = data_type_8
+      )
+      attr(data,"dataType") <- 9
+    }else{
+      data <- list(type1data = data_type_1,
+                   type2data = data_type_2,
+                   type3data = data_type_3,
+                   type4data = data_type_4
+      )
+      attr(data,"dataType") <- 6
+    }
   }
   return(data)
 }
