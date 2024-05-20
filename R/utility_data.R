@@ -360,7 +360,14 @@ get_census_variables <- function(year=NULL,
     cv[cv=="N/A"] <- NA
     
     if("values" %in% names(cv)){
-      cv <- cv %>% tidyr::unnest_longer(values,indices_to = "values_type") 
+      cv <- cv %>% tidyr::unnest_longer(values,indices_to = "values_type") %>% 
+        tidyr::unnest_longer(values,indices_to = "values_id",
+                             names_repair = "unique",
+                             simplify = T)
+      
+      cv <- cv %>% dplyr::rowwise() %>% dplyr::mutate(values = ifelse(inherits(values,"list"),
+                                                                      unname(unlist(values)),
+                                                                      values))
     }
     
     # Sort
@@ -452,7 +459,7 @@ get_census_variables <- function(year=NULL,
       cv <- cv %>% mutate(name = cvdata_id)
       nms <- c()
       for(i in 1:length(names(cv))){
-        if(names(cv)[i] %in% c("name","label","concept","group","suggested-weight","values","values_type","is-weight","var_type")){
+        if(names(cv)[i] %in% c("name","label","concept","group","suggested-weight","values","values_id","values_type","is-weight","var_type")){
           nms <- c(nms,names(cv)[i])
         }
       }

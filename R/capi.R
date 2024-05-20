@@ -709,7 +709,6 @@ capi <- function(year=NULL,
     if(!is.null(dataset_last) && dataset_last=="pums"){
       data <- data %>% dplyr::mutate(value = ifelse(value %in% nas,NA,value))
     }else{
-      
       data <- data %>% dplyr::mutate(vartype = ifelse(stringr::str_sub(data$variable,-1,-1)=="E","estimate","moe"))
       data <- data %>% dplyr::mutate(variable=stringr::str_sub(data$variable,1,-2))
       data <- data %>% tidyr::pivot_wider(names_from = vartype,values_from = value)
@@ -723,9 +722,16 @@ capi <- function(year=NULL,
     if(!is.null(dataset_last) && dataset_last=="pums"){
       ### Add Labels + Concept ---------------------------------
       if(verbose==TRUE)message(paste(dur(st),"Attaching variable/tableID labels..."))
-      CVV <- CV$variables %>% dplyr::select(name,label,var_type)
-      data <- left_join(data,CVV,by=c("variable"="name"))
-      
+      nms <- c()
+      for(i in 1:length(names(CV$variables))){
+        if(names(CV$variables)[i] %in% c("name","label","values","values_id","var_type")){
+          nms <- c(nms,names(CV$variables)[i])
+        }
+      }
+      CVV <- CV$variables %>% dplyr::select(nms)
+      data$value <- as.character(data$value)
+      data <- left_join(data,CVV,by=c("variable"="name","value"="values_id"))
+
       ## Create type_7_data (straight data)
       if(verbose==TRUE)message(paste(dur(st),"Creating type 7 data..."))
       data_type_7 <- data
@@ -735,7 +741,7 @@ capi <- function(year=NULL,
       ## Create type_8_data (summary)
       if(verbose==TRUE)message(paste(dur(st),"Creating type 8 data..."))
       data_type_8 <- data %>% group_by(variable,value) %>% 
-        summarize(subtotal = sum(value))
+        summarize(subtotal = n())
       data_type_8 <- data_type_8 %>% mutate(dt=8)
       attr(data_type_8,"dataType") <- 8
       
