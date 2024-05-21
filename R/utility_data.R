@@ -318,6 +318,7 @@ get_census_variables <- function(year=NULL,
                                  dataset_main=NULL,
                                  dataset_sub=NULL,
                                  dataset_last=NULL,
+                                 dataset_extra=NULL,
                                  detailed_tagging=FALSE,
                                  directory=FALSE,
                                  raw=FALSE,
@@ -328,7 +329,7 @@ get_census_variables <- function(year=NULL,
   
   if(directory==FALSE){ 
     baseurl <- "http://api.census.gov"
-    pathElements <- c(baseurl,"data",year,dataset_main,dataset_sub,dataset_last,"variables.json")
+    pathElements <- c(baseurl,"data",year,dataset_main,dataset_sub,dataset_last,dataset_extra,"variables.json")
     path <- httr2::request(paste(pathElements,collapse="/"))
     
     tryCatch(

@@ -89,9 +89,10 @@ capi <- function(year=NULL,
                  region=NULL,
                  division=NULL,
                  puma=NULL,
-                 dataset_main="acs",
-                 dataset_sub="acs5",
+                 dataset_main=NULL,
+                 dataset_sub=NULL,
                  dataset_last=NULL,
+                 dataset_extra=NULL,
                  censusVars=NULL,
                  verbose=FALSE,
                  profile=FALSE,
@@ -110,6 +111,36 @@ capi <- function(year=NULL,
 
 # Init --------------------------------------------------------------------
 ## Initial Error Checking --------------------------------------------------
+
+  # Define the type of dataset we are calling.
+
+  simpleDataMain <- c("pep","nonemp","zbp","cbp","surname","ewks","popproj","language","intltrade")
+  simpleDataSub <- c(99999)
+  simpleDataLast <- c("profile","cprofile")
+  valuesDatasetMain <- c("cps","sipp","sbo")
+  #valuesDatasetMain.grep <- c("ecn","cfs")
+  valuesDatasetMain.grep <- c(99999)
+  valuesDatasetSub <- c("sf1","sf2")
+  valuesDatasetLast <- c("pums","pumspr","profile","spp")
+  valuesDatasetMain.grep.tf <- (TRUE %in% unlist(lapply(valuesDatasetMain.grep,function(x) grepl(x,dataset_main))))
+  if((!is.null(dataset_main) && dataset_main %in% valuesDatasetMain) || 
+     (!is.null(dataset_sub) && dataset_sub %in% valuesDatasetSub) ||
+     (!is.null(dataset_last) && dataset_last %in% valuesDatasetLast)){
+    valuesDataset <- TRUE
+    simpleDataset <- FALSE
+  }else if((!is.null(dataset_main) && dataset_main %in% simpleDataMain) ||
+           (!is.null(dataset_sub) && dataset_sub %in% simpleDataSub) || 
+           (!is.null(dataset_last) && dataset_last %in% simpleDataLast) || 
+           valuesDatasetMain.grep.tf==TRUE){
+    valuesDataset <- FALSE
+    simpleDataset <- TRUE
+  }else if(dataset_main %in% c("acs","dec")){
+    valuesDataset <- FALSE
+    simpleDataset <- FALSE
+  }else{
+    stop(paste("!> Dataset `",dataset_main,"` is not currently supported, or may be invalid.",sep=""))
+  }
+
 
   # Check for oddball inputs on TRUE/FALSE
   if(is.logical(filterSummary)==FALSE)stop("Invalid input for `filterSummary`. Must be TRUE/FALSE.")
@@ -161,14 +192,16 @@ capi <- function(year=NULL,
   }
   
   # Check for minimum year
-  if(length(year)>1){
-    if(min(year)<2009 & dataset_main=="acs"){
-      stop("!> The ACS only provides data from 2009 on.")
+  if(dataset_main=="acs"){
+    if(dataset_sub=="acs5" & min(year)<2009){
+      stop("!> The ACS5 only provides data from 2009 on.")
     }
-  }else{
-    if(year<2009 & dataset_main=="acs"){
-        stop("!> The ACS only provides data from 2009 on.")
-      }
+    if(dataset_sub=="acs3" & min(year)<2007){
+      stop("!> The ACS3 only provides data from 2007 on.")
+    }
+    if(dataset_sub=="acs1" & min(year)<2005){
+      stop("!> The ACS1 only provides data from 2005 on.")
+    }
   }
   
   # Set default if null passed
@@ -177,7 +210,7 @@ capi <- function(year=NULL,
   }
   
   if(!is.null(dataset_last)){
-    if(dataset_last=="pums"){
+    if(dataset_last %in% valuesDatasetLast){
       if(!(geography %in% c("puma","region","division","state"))){
         stop(paste("!> ",geography," is not an acceptable geography for pums data. Use region, division, or state.",sep=""))
       }
@@ -198,11 +231,12 @@ capi <- function(year=NULL,
     CV <- get_census_variables(year=year, 
                                dataset_main = dataset_main, 
                                dataset_sub = dataset_sub, 
-                               dataset_last = dataset_last)
+                               dataset_last = dataset_last,
+                               dataset_extra = dataset_extra)
   }else{
     CV <- censusVars
   }
-
+  
 ## Internal Functions ------------------------------------------------------
   
   ifelse(is.null(st),st <- Sys.time(),st <- st)
@@ -508,7 +542,7 @@ capi <- function(year=NULL,
    for(t in 1:length(year)){
      
      url <- "http://api.census.gov/"
-     pathElements <- c("data",year[t],dataset_main,dataset_sub,dataset_last,"variables")
+     pathElements <- c("data",year[t],dataset_main,dataset_sub,dataset_last,dataset_extra,"variables")
      path <- paste(pathElements,collapse="/")
      
      ## Loops to handle multiple counties
@@ -670,6 +704,7 @@ capi <- function(year=NULL,
              -999999999)
     
     ### Initial data processing --------------------------
+    
     if(verbose==TRUE)message(paste(dur(st),"Initial data processing..."))
     if(geography=="block group"){
       data <- data %>% dplyr::rename(block_group = `block group`)
@@ -706,7 +741,7 @@ capi <- function(year=NULL,
 
     data$value <- as.numeric(data$value)
     
-    if(!is.null(dataset_last) && dataset_last=="pums"){
+    if(simpleDataset==TRUE || valuesDataset==TRUE){
       data <- data %>% dplyr::mutate(value = ifelse(value %in% nas,NA,value))
     }else{
       data <- data %>% dplyr::mutate(vartype = ifelse(stringr::str_sub(data$variable,-1,-1)=="E","estimate","moe"))
@@ -719,7 +754,8 @@ capi <- function(year=NULL,
     }
     
     ### Format and add helpful data--------------------------
-    if(!is.null(dataset_last) && dataset_last=="pums"){
+   
+    if(valuesDataset==TRUE || simpleDataset==TRUE){
       ### Add Labels + Concept ---------------------------------
       if(verbose==TRUE)message(paste(dur(st),"Attaching variable/tableID labels..."))
       nms <- c()
@@ -730,7 +766,12 @@ capi <- function(year=NULL,
       }
       CVV <- CV$variables %>% dplyr::select(nms)
       data$value <- as.character(data$value)
-      data <- left_join(data,CVV,by=c("variable"="name","value"="values_id"))
+      
+      if(valuesDataset==TRUE){
+        data <- left_join(data,CVV,by=c("variable"="name","value"="values_id"))
+      }else{
+        data <- left_join(data,CVV,by=c("variable"="name"))
+      }
 
       ## Create type_7_data (straight data)
       if(verbose==TRUE)message(paste(dur(st),"Creating type 7 data..."))
@@ -740,11 +781,16 @@ capi <- function(year=NULL,
       
       ## Create type_8_data (summary)
       if(verbose==TRUE)message(paste(dur(st),"Creating type 8 data..."))
-      data_type_8 <- data %>% group_by(variable,value) %>% 
-        summarize(subtotal = n())
+      if(valuesDataset==TRUE){
+        data_type_8 <- data %>% group_by(variable,value,values)
+      }else{
+        data_type_8 <- data %>% group_by(variable,value)
+      }
+      data_type_8 <- data_type_8 %>% summarize(subtotal = n()) %>% 
+        ungroup() %>% 
+        mutate(pct=round(subtotal/sum(subtotal),4))
       data_type_8 <- data_type_8 %>% mutate(dt=8)
       attr(data_type_8,"dataType") <- 8
-      
     }else{
       if(verbose==TRUE)message(paste(dur(st),"Adding tableID..."))
       tableID <- tableID_variable_preflight(variables=data$variable,
@@ -769,7 +815,7 @@ capi <- function(year=NULL,
       CVV1 <- CVV %>% dplyr::select(name,concept,labels,calculation,type,type_base,varID)
       # CVV2 <- CVV %>% dplyr::select(name,calculation,type,type_base,varID)
       data <- left_join(data,CVV1,by=c("variable"="name"))
-      
+
       ### Add Subtotals + Proportions ---------------------
       if(verbose==TRUE)message(paste(dur(st),"Adding subtotals + proportions..."))
       data <- data %>% dplyr::relocate(estimate,.after=labels)
@@ -889,16 +935,18 @@ capi <- function(year=NULL,
 
   if(verbose==TRUE)message(paste(dur(st),"Done."))
   
-  if(profile==FALSE){
-    if(mode=="table" && filterSummary==FALSE)data <- data_type_1
-    if(mode=="table" && filterSummary==TRUE)data <- data_type_2
-    if(mode=="summarize" && filterSummary==FALSE)data <- data_type_3
-    if(mode=="summarize" && filterSummary==TRUE)data <- data_type_4
-    if(mode=="table" && (!is.null(dataset_last) && dataset_last=="pums"))data <- data_type_7
-    if(mode=="summarize" && dataset_last=="pums")data <- data_type_8
-    
+    if(profile==FALSE){
+      if(isFALSE(valuesDataset)){
+        if(mode=="table" && filterSummary==FALSE)data <- data_type_1
+        if(mode=="table" && filterSummary==TRUE)data <- data_type_2
+        if(mode=="summarize" && filterSummary==FALSE)data <- data_type_3
+        if(mode=="summarize" && filterSummary==TRUE)data <- data_type_4
+      }else{
+        if(mode=="table")data <- data_type_7
+        if(mode=="summarize")data <- data_type_8
+      }
   }else{
-    if(dataset_last=="pums"){
+    if(isTRUE(valuesDataset)){
       data <- list(type7data = data_type_7,
                    type8data = data_type_8
       )
