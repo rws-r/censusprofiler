@@ -3,7 +3,7 @@
 CV <- readRDS(test_path("data","CV.RDS"))
 data <- readRDS(test_path("data","type_5_data.RDS"))
 geos <- readRDS(test_path("data","geos.RDS"))
-profile_tableID <- c("B01001","B01003")
+profile_tableID <- c("B01001","B02001")
 profile_variables <- c("B01001_002","B01001_026","B02001_001","B02001_002","B02001_003","B02001_004","B02001_005","B02001_006","B02001_007","B02001_008")
 usCompare <- readRDS(test_path("data","usCompare.RDS"))
 statesCompare <- readRDS(test_path("data","statesCompare.RDS"))

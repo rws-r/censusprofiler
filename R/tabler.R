@@ -178,6 +178,9 @@ tabler <- function(data_object=NULL,
                             tract=tract,
                             block_group=block_group,
                             censusVars=censusVars,
+                            dataset_main = dataset_main,
+                            dataset_sub = dataset_sub,
+                            dataset_last = dataset_last,
                             verbose=verbose,
                             st=st)
 
@@ -387,7 +390,7 @@ tabler <- function(data_object=NULL,
       if(summaryLevels<0){
         level <- level+1
         }
-   
+
    lF <- data.frame(type=df[u,"type"],rowNum=u,level=level)
    lookupFrame <- rbind(lookupFrame,lF)
   }
@@ -548,7 +551,7 @@ tabler <- function(data_object=NULL,
       }
     }else if(mode=="bygeo"){
       if("median" %in% df$calculation){
-        cols <- c("name","labels","estimate")
+        cols <- c("geo_name","labels","estimate")
         colName <- c("Geography Name","Variable","Est. (n)") 
         colOption <- 4
         if(moe==TRUE & mode %in% c("simple","nosummary","bygeo")){
@@ -562,7 +565,7 @@ tabler <- function(data_object=NULL,
           colOption <- colOption+1
         }
       }else{
-        cols <- c("name","labels","estimate","pct")
+        cols <- c("geo_name","labels","estimate","pct")
         colName <- c("Geography Name","Variable","Est. (n)","Est. (%)") 
         colOption <- 5
         if(moe==TRUE & mode %in% c("simple","nosummary","bygeo")){
@@ -626,10 +629,10 @@ tabler <- function(data_object=NULL,
     .default = ""
   )
   table_title <- paste(as.character(unique(df$concept)),table_type)
-  
+
   ## Create the table.
    if(mode=="bygeo"){
-     x <- as_grouped_data(df,groups = 'name',columns=cols)
+     x <- as_grouped_data(df,groups = 'geoid',columns=cols)
      x <- as_flextable(x,col_keys = cols)
    }else{
      x <- flextable(df,col_keys = cols)

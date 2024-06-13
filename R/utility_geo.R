@@ -1433,11 +1433,20 @@ get_geocode_radius <- function(filterAddress=NULL,
       counties <- NULL
     }
     
+    if(geography=="state"){
+      geonames <- list(geoid = CT$GEOID,
+                          geo_name = CT$NAME)
+    }else{
+      geonames <- list(geoid = CT$GEOID,
+                          geo_name = CT$NAMELSAD)
+    }
+    
     if(fipsOnly==TRUE){
       df <- list(
         geoid = CT$GEOID,
         states = states,
-        counties = counties
+        counties = counties,
+        geo_names = geonames
       )
       if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
       if(geography=="tract"){
@@ -1455,7 +1464,8 @@ get_geocode_radius <- function(filterAddress=NULL,
     }else if(profile==TRUE){
       df <- list(geoid = CT$GEOID,
                  states = states,
-                 counties = counties)
+                 counties = counties,
+                 geo_names = geonames)
       if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
       if(geography=="tract"){
         df <- append(df,list(tracts = CT$TRACTCE))
@@ -1475,6 +1485,7 @@ get_geocode_radius <- function(filterAddress=NULL,
                  geoid = CT$GEOID,
                  states = states,
                  counties = counties,
+                 geo_names = geonames,
                  coordinates = coords)  
       if(geography=="place"){
         df <- append(df,list(places = CT$PLACEFP))
@@ -1484,6 +1495,7 @@ get_geocode_radius <- function(filterAddress=NULL,
                  geoid = CT$GEOID,
                  states = states,
                  counties = counties,
+                 geo_names = geonames,
                  coordinates = coords)
       if(neighbors==TRUE)df <- append(df,list(df.neighbors = CT2))
       if(geography=="tract"){

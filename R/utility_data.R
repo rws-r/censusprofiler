@@ -384,7 +384,7 @@ get_census_variables <- function(year=NULL,
     
     if(TRUE %in% unique(grepl("!!",cv$label))){
       #cv <- cv[grepl("!!",cv$label)==TRUE,]
-      cv$label <- substr(cv$label,1,nchar(cv$label)-1)
+      cv$label <- substr(cv$label,1,nchar(cv$label))
       
       ## Add nice extra info.
       # Rename group to table_id if exists.
@@ -2522,6 +2522,7 @@ summarize_data <- function(data=NULL,
 tableID_variable_preflight <- function(tableID = NULL,
                                        variables = NULL,
                                        censusVars = NULL,
+                                       return = "all",
                                        verbose = FALSE){
   #TODO
   #incorporate checks to use pums data
@@ -2572,13 +2573,19 @@ tableID_variable_preflight <- function(tableID = NULL,
       }
     }
     variables <- newvars
-    
+
     # Extract tableID if not supplied, as long as we have variables w/ prefix
     if(is.null(tableID) & length(unique(vartypelist))==1){
       if(unique(vartypelist)=="A"){
-        tableID <- unique(unlist(lapply(variables, function(x) strsplit(x,"_")[[1]][1])))
+        tableID <- unlist(lapply(variables, function(x) strsplit(x,"_")[[1]][1]))
       }
     }
+    
+    # Create join table
+    tableID.join <- data.frame(table_id=tableID,variable=variables)
+    
+    # Get list of unique tableIDs
+    tableID <- unique(tableID)
     
     # Check for variables that don't exist in directory
     bumlist <- c()
@@ -2604,7 +2611,11 @@ tableID_variable_preflight <- function(tableID = NULL,
       if(is.null(tableID)){
         stop("!> To add all variables, you need to provide a tableID.")
       }else{
-        variables <- (censusVars$variables %>% filter(table_id %in% tableID))$name
+        tabVars <- censusVars$variables %>% filter(table_id %in% tableID)
+      # Create join table
+        tableID.join <- data.frame(table_id=tabVars$table_id,variable=tabVars$name)
+        variables <- tabVars$name
+        tableID <- unique(tabVars$table_id)
       }
     }
     
@@ -2621,9 +2632,17 @@ tableID_variable_preflight <- function(tableID = NULL,
     variables <- formattedvariables
   }
   
-  return(list(tableID = tableID,
-              variables = variables))
-  
+  if(return=="tableID"){
+    return(tableID)
+  }else if(return=="variables"){
+    return(variables)
+  }else if(return=="raw"){
+    return(tableID.join)
+  }else{
+    return(list(table_id = tableID,
+                variable = variables,
+                tableID.join = tableID.join))
+  }
 }
 
 # theme_censusprofiler --------------

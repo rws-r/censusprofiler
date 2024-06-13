@@ -9,6 +9,7 @@ get_census_variables(
   dataset_main = NULL,
   dataset_sub = NULL,
   dataset_last = NULL,
+  dataset_extra = NULL,
   detailed_tagging = FALSE,
   directory = FALSE,
   raw = FALSE,

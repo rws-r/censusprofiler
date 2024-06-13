@@ -130,8 +130,8 @@ mapper <- function(mapDF=NULL,
                    dispPlaces=TRUE,
                    road_resolution=1,
                    dispRails=FALSE,
-                   dataset_main="acs",
-                   dataset_sub="acs5",
+                   dataset_main=NULL,
+                   dataset_sub=NULL,
                    dataset_last=NULL,
                    censusVars=NULL,
                    verbose=FALSE,
@@ -168,6 +168,10 @@ mapper <- function(mapDF=NULL,
   if(is.null(tableID) && is.null(variable) && is.null(filterAddress) && !is.null(geoidLookup) && areaOnly==FALSE){
     areaOnly <- TRUE
     warning("!> This appears to be an areaOnly==TRUE call. Automatically adjusted.")
+  }
+  
+  if(is.null(dataset_main)){
+    stop("!> You must provide a dataset. Options are `acs` and subsidiaries.")
   }
 
 # Data init ---------------------------------------------------------------
@@ -256,6 +260,13 @@ mapper <- function(mapDF=NULL,
         variable <- var$variables
       }
       mapDF <- mapDF[mapDF$variable==variable,]
+      
+      if(is.null(tableID)){
+        tableID <- tableID_variable_preflight(variables=variable,
+                                              return="tableID",
+                                              censusVars = CV,
+                                              verbose = verbose)
+      }
     }
   }else if(!is.null(filterAddress) | !is.null(coords)){
     if(verbose==TRUE)message("- mapper | No mapDF. Processing filterAddress or coords...")
@@ -312,6 +323,9 @@ mapper <- function(mapDF=NULL,
                     state=state,
                     county=county,
                     tract=tract,
+                    dataset_main = dataset_main,
+                    dataset_sub = dataset_sub,
+                    dataset_last = dataset_last,
                     block_group = block_group,
                     verbose=verbose,
                     st=st)
@@ -350,7 +364,7 @@ mapper <- function(mapDF=NULL,
     if(verbose==TRUE)message(paste(dur(st),"Setting up mapDF with modifications..."))
     
     if(dispPerc==TRUE){
-      mapDF <- mapDF %>% mutate(value = as.numeric(pct))
+      mapDF <- mapDF %>% mutate(value = as.numeric(pct_by_type))
       mapDF <- mapDF %>% mutate(value_print = formattable::percent(value,digits=2))
     }else{
       mapDF <- mapDF %>% mutate(value = estimate)
@@ -362,8 +376,15 @@ mapper <- function(mapDF=NULL,
   if(radiusOnly==FALSE && areaOnly==FALSE){
     if(verbose==TRUE)message(paste(dur(st),"Update name col to strip out extraneous geo data..."))
     md <- st_drop_geometry(mapDF)
+    # if("geo_name" %in% names(md)){
+    #   nm <- "name"
+    # }else if("NAME" %in% names(md)){
+    #   nm <- "NAME"
+    # }else{
+    #   stop("!> mapper: Neither `name` nor `NAME` found in colnames. Is something wrong with data?")
+    # }
     for(i in 1:nrow(md)){
-      mapDF[i,'name_clean'] <- (unlist(stringr::str_split(md[i,'name'],";"))[1])
+      mapDF[i,'name_clean'] <- (unlist(stringr::str_split(md[i,"geo_name"],";"))[1])
     }
   }else{
     ## If we are passing only filter address, etc. but no mapDF, use ggr object.

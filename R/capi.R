@@ -101,20 +101,22 @@ capi <- function(year=NULL,
                  test=FALSE, 
                  st=NULL){
 
-  estimate <- moe <- vartype <- value <- name <- geoid <- NAME <-
+  estimate <- moe <- vartype <- value <- geoid <-
     subtotal <- pct <- `block group` <- 
     variable <- label <- table_id <- calculation <- concept <- 
-    type <- subtotals <- varID <- pct <- moe_pct <- 
+    type <- varID <- pct <- moe_pct <- 
     data_type_1 <- data_type_2 <- data_type_3 <- data_type_4 <- 
-    type_base <- subtotal_by_type <- pct_by_type <- moe_pct_by_type <-  
+    type_base <- subtotal_by_type <- pct_by_type <-  
     TRACTCE <- COUNTYFP <- NULL
 
 # Init --------------------------------------------------------------------
 ## Initial Error Checking --------------------------------------------------
 
+  if(is.null(dataset_main)){
+    stop("!> You must provide a dataset. Options are `acs` and subsidiaries.")
+  }
   # Define the type of dataset we are calling.
-
-  simpleDataMain <- c("pep","nonemp","zbp","cbp","surname","ewks","popproj","language","intltrade")
+  simpleDataMain <- c("pep","nonemp","zbp","cbp","surname","ewks","popproj","language","intltrade","cre")
   simpleDataSub <- c(99999)
   simpleDataLast <- c("profile","cprofile")
   valuesDatasetMain <- c("cps","sipp","sbo")
@@ -122,7 +124,9 @@ capi <- function(year=NULL,
   valuesDatasetMain.grep <- c(99999)
   valuesDatasetSub <- c("sf1","sf2")
   valuesDatasetLast <- c("pums","pumspr","profile","spp")
+  
   valuesDatasetMain.grep.tf <- (TRUE %in% unlist(lapply(valuesDatasetMain.grep,function(x) grepl(x,dataset_main))))
+  
   if((!is.null(dataset_main) && dataset_main %in% valuesDatasetMain) || 
      (!is.null(dataset_sub) && dataset_sub %in% valuesDatasetSub) ||
      (!is.null(dataset_last) && dataset_last %in% valuesDatasetLast)){
@@ -140,7 +144,9 @@ capi <- function(year=NULL,
   }else{
     stop(paste("!> Dataset `",dataset_main,"` is not currently supported, or may be invalid.",sep=""))
   }
-
+  
+  # TODO Add geography check, perhaps by querying or prebuilding a master list
+  # of acceptable geographies for each dataset.
 
   # Check for oddball inputs on TRUE/FALSE
   if(is.logical(filterSummary)==FALSE)stop("Invalid input for `filterSummary`. Must be TRUE/FALSE.")
@@ -177,9 +183,6 @@ capi <- function(year=NULL,
   }
   if(is.null(year)){
     stop("!> You must provide a year parameter.")
-  }
-  if(is.null(dataset_main)){
-    stop("!> You must provide a dataset. Options are `acs` and subsidiaries.")
   }
   if(geography %in% c("region","division","subminor civil division","consolidated city")){
     stop(paste("!> Unfortunately, we cannot provide results for `",geography,"` geographies at this time.",sep=""))
@@ -252,10 +255,11 @@ capi <- function(year=NULL,
     preflight_check <- tableID_variable_preflight(tableID = tableID,
                                                   variables = variables,
                                                   censusVars = CV,
+                                                  return = "all",
                                                   verbose = verbose)
     
-    tableID <- preflight_check$tableID
-    variables <- preflight_check$variables
+    tableID <- preflight_check$table_id
+    variables <- preflight_check$variable
    
   # Census API has a limit of 50 variables at a time. We need to break the 
   # variable list down into serviceable chunks. 
@@ -408,7 +412,6 @@ capi <- function(year=NULL,
      }
      county <- new_counties
    }
-
 
   ### Get geography filters if address and radius or geo type is supplied. ---------------
    if(!is.null(filterAddress) | !is.null(filterByGeoType) | !is.null(coords)){
@@ -754,7 +757,6 @@ capi <- function(year=NULL,
     }
     
     ### Format and add helpful data--------------------------
-   
     if(valuesDataset==TRUE || simpleDataset==TRUE){
       ### Add Labels + Concept ---------------------------------
       if(verbose==TRUE)message(paste(dur(st),"Attaching variable/tableID labels..."))
@@ -795,14 +797,14 @@ capi <- function(year=NULL,
       if(verbose==TRUE)message(paste(dur(st),"Adding tableID..."))
       tableID <- tableID_variable_preflight(variables=data$variable,
                                             censusVars = CV,
+                                            return = "raw",
                                             verbose=verbose)
-      tableID <- tableID$tableID
-      data <- data %>% dplyr::mutate(table_id = tableID)
+      
+      data <- data %>% dplyr::mutate(table_id = tableID$table_id)
+      #data <- dplyr::left_join(data,tableID,by="variable")
       
       ### Add Variable--------------------------
       if(verbose==TRUE)message(paste(dur(st),"Adding variable..."))
-      data <- data %>% dplyr::rename(name = NAME)
-      data <- data %>% dplyr::arrange(name,variable)
       
       ### Add Year + relocate variable-------------------------- 
       if(verbose==TRUE)message(paste(dur(st),"Adding year + relocating variable..."))
@@ -836,7 +838,7 @@ capi <- function(year=NULL,
       
       ### Add Geographical Data ----------------
       if(verbose==TRUE)message(paste(dur(st),"Adding geography..."))
-      data <- data %>% dplyr::relocate(name,.after=moe_pct)
+   #   data <- data %>% dplyr::relocate(name,.after=moe_pct)
       data <- data %>% dplyr::mutate(geography=geography)
       if("state" %in% names(data))data <- data %>% dplyr::relocate(state,.after=geography)
       if("county" %in% names(data))data <- data %>% dplyr::relocate(county,.after=state)
@@ -854,7 +856,14 @@ capi <- function(year=NULL,
         data <- data %>% dplyr::relocate(geoid, .after=geography)
       }
       
+      if(!is.null(ggr)){
+        geonames <- as.data.frame(ggr$geo_names)
+        data <- data %>% left_join(geonames,by=join_by(geoid))
+      }
+      
       data <- data %>% dplyr::relocate(calculation,type,type_base,varID,.after=geoid)
+      
+      data <- data %>% dplyr::arrange(geoid,variable)
       
       if(verbose==TRUE)message(paste(dur(st),"Creating type 1 data..."))
       data_type_1 <- data
@@ -936,7 +945,7 @@ capi <- function(year=NULL,
   if(verbose==TRUE)message(paste(dur(st),"Done."))
   
     if(profile==FALSE){
-      if(isFALSE(valuesDataset)){
+      if(all(isFALSE(valuesDataset) && isFALSE(simpleDataset))){
         if(mode=="table" && filterSummary==FALSE)data <- data_type_1
         if(mode=="table" && filterSummary==TRUE)data <- data_type_2
         if(mode=="summarize" && filterSummary==FALSE)data <- data_type_3
@@ -946,7 +955,7 @@ capi <- function(year=NULL,
         if(mode=="summarize")data <- data_type_8
       }
   }else{
-    if(isTRUE(valuesDataset)){
+    if(all(isTRUE(valuesDataset) && isTRUE(simpleDataset))){
       data <- list(type7data = data_type_7,
                    type8data = data_type_8
       )
