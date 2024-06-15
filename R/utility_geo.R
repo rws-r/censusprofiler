@@ -1550,12 +1550,17 @@ get_geocode_radius <- function(filterAddress=NULL,
 #' map_locations(addressList,state="IL",county=43)
 #' }
 map_locations <- function(addressList,
+                          secondaryAddressList=NULL,
                           state = NULL,
                           county = NULL,
                           density = FALSE,
                           density_col = NULL,
                           geosObject = NULL,
-                          verbose = FALSE){
+                          verbose = FALSE,
+                          pointColor = "steelblue",
+                          secondaryPointColor = "darkred",
+                          bgColor = "#FFFFFF",
+                          borderColor = "#444444"){
   
   ## Deal with "no visible binding for global variable" error 
   NAME <- STUSPS <- STATEFP <- NAMELSAD <- COUNTYFP <- state_density <- frq <- NULL
@@ -1634,7 +1639,7 @@ map_locations <- function(addressList,
     cont_states <- geo_states %>% filter(!(STATEFP %in% c("02","15")))
     cont_address <- st_filter(addressList,cont_states)
     AK <- geo_states %>% filter(STATEFP=="02")
-    AK_address <- st_filter(addressList,AK,)
+    AK_address <- st_filter(addressList,AK)
     HI <- geo_states %>% filter(STATEFP=="15")
     HI_address <- st_filter(addressList,HI)
     cont_states <- st_transform(cont_states,2163)
@@ -1643,38 +1648,64 @@ map_locations <- function(addressList,
     #AK_address <- st_transform(AK_address,3338)
     HI <- st_transform(HI,6629)
     #HI_address <- st_transform(HI_address,6629)
+    
+    if(!is.null(secondaryAddressList)){
+      sec_cont_address <- st_filter(secondaryAddressList,cont_states)
+      sec_AK_address <- st_filter(secondaryAddressList,AK)
+      sec_HI_address <- st_filter(secondaryAddressList,HI)
+      sec_AK <- st_transform(sec_AK,3338)
+      sec_HI <- st_transform(sec_HI,6629) 
+    }
+    
   }else{
     inset <- FALSE
     cont_states <- geo_states
     cont_states <- sf::st_transform(geo_states,2163)
     cont_address <- addressList
+    sec_cont_address <- st_filter(secondaryAddressList,cont_states)
   }
-  
   cont_states <- tmap::tm_basemap(server=providers$Stadia.StamenTonerLite) +
     {if(density==TRUE){
       tmap::tm_shape(cont_states) +
-        tmap::tm_polygons("frq") 
+        tmap::tm_polygons("frq",
+                          col=bgColor,
+                          border.col = borderColor)
     }else{
       tmap::tm_shape(cont_states) +
-        tmap::tm_polygons() 
+        tmap::tm_polygons(col=bgColor,
+                          border.col = borderColor)
     }} + 
     {if(density==FALSE){
-      tmap::tm_shape(cont_address) +
-        tmap::tm_dots()
-    }}
+      {if(!is.null(secondaryAddressList)){
+        tmap::tm_shape(cont_address) +
+          tmap::tm_dots(col=pointColor) +
+        tmap::tm_shape(sec_cont_address) +
+          tmap::tm_dots(col=secondaryPointColor)
+      }else{
+        tmap::tm_shape(cont_address) +
+          tmap::tm_dots(col=pointColor)
+      }} 
+    }} +
   
   if(nrow(AK_address)>0){
     AK_states <- tmap::tm_basemap(server=providers$Stadia.StamenTonerLite) +
       {if(density==TRUE){
         tmap::tm_shape(AK) +
-          tmap::tm_polygons("frq") 
+          tmap::tm_polygons("frq",
+                            col=bgColor,
+                            border.col = borderColor) 
       }else{
         tmap::tm_shape(AK) +
-          tmap::tm_polygons() 
+          tmap::tm_polygons(col=bgColor,
+                            border.col = borderColor)
       }} + 
       {if(density==FALSE){
         tmap::tm_shape(AK_address) +
-          tmap::tm_dots()
+          tmap::tm_dots(col=pointColor)
+        {if(!is.null(secondaryAddressList)){
+          tmap::tm_shape(sec_AK) +
+            tmap::tm_dots(col=pointColor)
+        }}
       }}
   }else{
     AK_states <- NULL
@@ -1684,14 +1715,21 @@ map_locations <- function(addressList,
     HI_states <- tmap::tm_basemap(server=providers$Stadia.StamenTonerLite) +
       {if(density==TRUE){
         tmap::tm_shape(HI) +
-          tmap::tm_polygons("frq") 
+          tmap::tm_polygons("frq",
+                            col=bgColor,
+                            border.col = borderColor) 
       }else{
         tmap::tm_shape(HI) +
-          tmap::tm_polygons() 
+          tmap::tm_polygons(col=bgColor,
+                            border.col = borderColor)  
       }} + 
       {if(density==FALSE){
         tmap::tm_shape(HI_address) +
-          tmap::tm_dots()
+          tmap::tm_dots(col=pointColor)
+        {if(!is.null(secondaryAddressList)){
+          tmap::tm_shape(sec_HI) +
+            tmap::tm_dots(col=pointColor)
+        }}
       }}
   }else{
     HI_states <- NULL
