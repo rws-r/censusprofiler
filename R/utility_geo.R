@@ -1529,6 +1529,7 @@ get_geocode_radius <- function(filterAddress=NULL,
 #' geocodes them, and plots them. 
 #'
 #' @param addressList Either a vector with addresses listed, or a dataframe needing formatting.
+#' @param secondaryAddressList A comparison set of addresses to plot.
 #' @param state Parameter to filter by state.
 #' @param county Parameter to filter by county.
 #' @param geosObject Optional geosObject to speed up processing time.
@@ -1655,11 +1656,6 @@ map_locations <- function(addressList,
     #AK_address <- st_transform(AK_address,3338)
     HI <- st_transform(HI,6629)
     #HI_address <- st_transform(HI_address,6629)
-    if(!is.null(secondaryAddressList)){
-      #sec_AK_address <- st_transform(sec_AK_address,3338)
-      #sec_HI_address <- st_transform(sec_HI_address,6629) 
-      #sec_cont_address <- st_transform(sec_cont_address,2163)
-    }
     
   }else{
     inset <- FALSE
@@ -1668,6 +1664,9 @@ map_locations <- function(addressList,
     cont_address <- addressList
     sec_cont_address <- st_filter(secondaryAddressList,cont_states)
   }
+  
+  is.null(secondaryAddressList)
+  
   cont_states <- tmap::tm_basemap(server=providers$Stadia.StamenTonerLite) +
     {if(density==TRUE){
       tmap::tm_shape(cont_states) +
@@ -1690,6 +1689,10 @@ map_locations <- function(addressList,
           tmap::tm_dots(col=pointColor)
       }} 
     }} +
+    
+    {if(nrow(AK_address)>0 | nrow(HI_address)>0){
+      tm_layout(inner.margins = c(.29,.15,.05,.15))
+    }} + 
   
   if(nrow(AK_address)>0){
     AK_states <- tmap::tm_basemap(server=providers$Stadia.StamenTonerLite) +
@@ -1706,8 +1709,9 @@ map_locations <- function(addressList,
       {if(density==FALSE){
         tmap::tm_shape(AK_address) +
           tmap::tm_dots(col=pointColor)
-        {if(!is.null(secondaryAddressList)){
-          tmap::tm_shape(sec_AK) +
+        {if(!is.null(secondaryAddressList) & 
+            nrow(sec_AK_address)>0){
+          tmap::tm_shape(sec_AK_address) +
             tmap::tm_dots(col=pointColor)
         }}
       }}
@@ -1730,8 +1734,9 @@ map_locations <- function(addressList,
       {if(density==FALSE){
         tmap::tm_shape(HI_address) +
           tmap::tm_dots(col=pointColor)
-        {if(!is.null(secondaryAddressList)){
-          tmap::tm_shape(sec_HI) +
+        {if(!is.null(secondaryAddressList) &
+            nrow(sec_AK_address)>0){
+          tmap::tm_shape(sec_HI_address) +
             tmap::tm_dots(col=pointColor)
         }}
       }}
@@ -1746,11 +1751,13 @@ map_locations <- function(addressList,
   cowplot::ggdraw() + 
     cowplot::draw_plot(cont_tmap) + 
     {if(!is.null(AK_states)){cowplot::draw_plot(AK_tmap,
-                                                height=0.3,
-                                                x=-0.3)}} + 
+                                                height=0.24,
+                                                x=-0.13,
+                                                y=0.01)}} + 
     {if(!is.null(HI_states)){cowplot::draw_plot(HI_tmap,
-                                                height=0.3,
-                                                x=0.3)}}
+                                                height=0.24,
+                                                x=0.13,
+                                                y=0.01)}}
   
   
 }
