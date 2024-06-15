@@ -6,12 +6,17 @@
 \usage{
 map_locations(
   addressList,
+  secondaryAddressList = NULL,
   state = NULL,
   county = NULL,
   density = FALSE,
   density_col = NULL,
   geosObject = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  pointColor = "steelblue",
+  secondaryPointColor = "darkred",
+  bgColor = "#FFFFFF",
+  borderColor = "#444444"
 )
 }
 \arguments{
