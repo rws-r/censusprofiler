@@ -1642,19 +1642,23 @@ map_locations <- function(addressList,
     AK_address <- st_filter(addressList,AK)
     HI <- geo_states %>% filter(STATEFP=="15")
     HI_address <- st_filter(addressList,HI)
-    cont_states <- st_transform(cont_states,2163)
-    # cont_address <- st_transform(cont_states,2163)
-    AK <- st_transform(AK,3338)
-    #AK_address <- st_transform(AK_address,3338)
-    HI <- st_transform(HI,6629)
-    #HI_address <- st_transform(HI_address,6629)
     
     if(!is.null(secondaryAddressList)){
       sec_cont_address <- st_filter(secondaryAddressList,cont_states)
       sec_AK_address <- st_filter(secondaryAddressList,AK)
       sec_HI_address <- st_filter(secondaryAddressList,HI)
-      sec_AK <- st_transform(sec_AK,3338)
-      sec_HI <- st_transform(sec_HI,6629) 
+    }
+    
+    cont_states <- st_transform(cont_states,2163)
+    #cont_address <- st_transform(cont_states,2163)
+    AK <- st_transform(AK,3338)
+    #AK_address <- st_transform(AK_address,3338)
+    HI <- st_transform(HI,6629)
+    #HI_address <- st_transform(HI_address,6629)
+    if(!is.null(secondaryAddressList)){
+      #sec_AK_address <- st_transform(sec_AK_address,3338)
+      #sec_HI_address <- st_transform(sec_HI_address,6629) 
+      #sec_cont_address <- st_transform(sec_cont_address,2163)
     }
     
   }else{
