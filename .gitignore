@@ -42,6 +42,9 @@ usCompare.RDS
 v.RDS
 variables.RDS
 village.RDS
+<<<<<<< HEAD
 .Rdata
 .httr-oauth
 .quarto
+=======
+>>>>>>> 05e49dfee789a0cd2c2bf5b83f796310a25125a2
