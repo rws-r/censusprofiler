@@ -101,13 +101,15 @@ build_map <- function(mapDF=NULL,
   }
   
   if(verbose==TRUE)message(" - build_map() | Crafting map...")
-  
+ # mapDF <- sf::st_as_sf(data.frame(value = 1, geometry = mapDF$geometry))
+
   map <- tmap::tm_basemap(server=providers$Stadia.StamenTonerLite) +
     tmap::tm_shape(mapDF,unit="mi") +
-    tmap::tm_polygons(value,
+    tmap::tm_polygons(id=value,
                 title=LegendTitle,
                 style="pretty",
-                id="name_clean",
+               # id=value,
+                col="#FFFFFF",
                 alpha=alpha) +
     tmap::tm_layout(main.title = MapTitle,
               legend.bg.color = "#FFFFFF",
@@ -135,8 +137,8 @@ build_map <- function(mapDF=NULL,
               tmap::tm_polygons(col="#BFE7E1") }}}} + 
         {if((areaOnly==FALSE && !is.null(filterAddress)) || radiusOnly==TRUE){
           tmap::tm_shape(ggrObject$buffer) +
-            tmap::tm_borders("darkred",lwd=1) +
-            tmap::tm_shape(ggrObject$coordinates) +
+            tmap::tm_borders(col="darkred",lwd=1) +
+          tmap::tm_shape(ggrObject$coordinates) +
             tmap::tm_dots("darkred",size = .25) 
         }}
     }} +
@@ -951,6 +953,7 @@ Do you want to continue, and potentially overwrite? (Y/N)")
 #' @param intersectOverlap A proportion of minimum required overlap from radius
 #' and unit area.
 #' @param neighbors Logical parameter to specify whether to get neighboring tracts around selected area.
+#' @param neighbor_depth To specify the ring depth of neighboring geos to capture.
 #' @param test Internal: Parameter to allow testing passthroughs [depreciated]
 #' @param verbose Internal: Parameter for printing feedback.
 #' @param geosObject Optional geosObject object to speed up geo processing.
@@ -1016,6 +1019,7 @@ get_geocode_radius <- function(filterAddress=NULL,
                                coords=NULL,
                                intersectOverlap=0.1,
                                neighbors=FALSE,
+                               neighbor_depth=1,
                                year=NULL,
                                test=FALSE,
                                verbose=FALSE,
@@ -1090,7 +1094,7 @@ get_geocode_radius <- function(filterAddress=NULL,
   if(!is.null(geosObject$geo_tracts))geo_tracts <- geosObject$geo_tracts
   if(!is.null(geosObject$geo_blocks))geo_blocks <- geosObject$geo_blocks 
   if(!is.null(geosObject$geo_places))geo_places <- geosObject$geo_places 
-  
+
   ## Check for class mismatches.
   if(!is.null(state)){
     if(inherits(geo_states$STATEFP,"character")==TRUE || 
@@ -1161,24 +1165,14 @@ get_geocode_radius <- function(filterAddress=NULL,
       if(verbose==TRUE)message(paste("    -ggr--Processing coords took ",round(difftime(Sys.time(),st,units = "sec"),2)))
       st <- Sys.time()
     }
-    
+
     ### Set buffer------
-    buffer <- sf::st_buffer(coords,units::set_units(filterRadius*5280,feet))
-    bufferBig <- sf::st_buffer(coords,units::set_units((filterRadius+(filterRadius*0.5))*5280,feet))
-    
+    buffer <- sf::st_buffer(coords,
+                            units::set_units(filterRadius*5280,feet))
+    statefp <- as.numeric(geo_states[which(st_intersects(coords,geo_states,sparse=F)),]$STATEFP)
     if(verbose==TRUE)message(paste("    -ggr--Setting radius took ",round(difftime(Sys.time(),st,units = "sec"),2)))
     
     st <- Sys.time()
-    
-    ## Get state from filterAddress / coords--------
-    statefp <- sf::st_filter(geo_states, buffer, .predicate = sf::st_intersects)$STATEFP
-    if(geography=="state"){
-      countyfp <- NULL
-    }else{
-      geo_counties <- geo_counties %>% filter(STATEFP %in% statefp)
-      #Using buffer big to include potential counties for neighbors
-      countyfp <- sf::st_filter(geo_counties, bufferBig, .predicate = sf::st_intersects)
-    }
     
   # Build radius around filterByGeoType----------
   }else if(!is.null(filterByGeoType)){ 
@@ -1258,12 +1252,20 @@ get_geocode_radius <- function(filterAddress=NULL,
   }else{
     #### Build ggr w/ no radius geos-------
     buffer <- NULL
+    ## Get multi-state county lists
     if(!is.null(state)){
-      states <- geo_states %>% filter(STATEFP==state | STUSPS==state | NAME==state)
+      states <- geo_states %>% filter(STATEFP %in% state | STUSPS %in% state | NAME %in% state)
       statefp <- states$STATEFP
     }else{
-      statefp <- NULL
+      ## If geography is county, and no states selected, select all states.
+      if(geography=="county"){
+        states <- geo_states %>% filter(STATEFP <= 56)
+        statefp <- states$STATEFP
+      }else{
+        statefp <- NULL
+      }
     }
+
     if(!is.null(county)){
       if(!is.null(statefp)){
         #geo_counties <- geo_counties %>% filter(STATEFP==statefp)
@@ -1300,18 +1302,18 @@ get_geocode_radius <- function(filterAddress=NULL,
       
     }
     
-    if(is.null(state) && is.null(county) && is.null(geoidLookup))stop("No geographic specifications given.")
+    if(is.null(state) && is.null(county) && is.null(geoidLookup) && geography!="state" && is.null(statefp))stop("Geographic limitations requred. None provided.")
   }
-  
+
+
   if(verbose==TRUE)message(paste("    -ggr--Parsing addy took ",round(difftime(Sys.time(),st,units = "sec"),2)))
-  
   st <- Sys.time()
-  
   #### Set returns-----
   if(geocodeOnly==TRUE){
     return(coords)
-  }else if(radiusOnly==TRUE){
-    return(buffer)
+  # }else if(radiusOnly==TRUE){
+  #   buffer <- list(buffer = buffer)
+  #   return(buffer)
   }else if(!is.null(geoidLookup)){
     if(is.data.frame(G)){
       df <- list(df = G,
@@ -1325,10 +1327,8 @@ get_geocode_radius <- function(filterAddress=NULL,
       stop("!> There was an error in geoidLookup.")
     }
   }else{
-    
     if(verbose==TRUE)message(paste("    -ggr--Filtering by state and county took ",round(difftime(Sys.time(),st,units = "sec"),2)))
     st <- Sys.time()
-    
     # Filter tract list to make intersection less laborious.
     if(geography=="tract"){
       CT <- geo_tracts 
@@ -1341,83 +1341,134 @@ get_geocode_radius <- function(filterAddress=NULL,
     }else{
       CT <- geo_states
     }
-    if(!is.null(countyfp)){
-      
-      for(i in 1:length(countyfp)){
-        if(i<2){
-          stfp <- as.character(sf::st_drop_geometry(countyfp[i,"STATEFP"]))
-          ctfp <- as.character(sf::st_drop_geometry(countyfp[i,"COUNTYFP"]))
-          ctCT <- CT %>% filter(STATEFP==stfp & COUNTYFP==ctfp)
-        }else{
-          stfp <- as.character(sf::st_drop_geometry(countyfp[i,"STATEFP"]))
-          ctfp <- as.character(sf::st_drop_geometry(countyfp[i,"COUNTYFP"]))
-          ctCTi <- CT %>% filter(STATEFP==stfp & COUNTYFP==ctfp)
-          ctCT <- rbind(ctCT,ctCTi)
+
+    #if(!(geography %in% c("state","us","county"))){
+    if(!(geography %in% c("state","us"))){
+      if(is.null(filterAddress)){
+        if(!is.null(state)){
+          if(!is.null(county)){
+            CT <- CT %>% filter(STATEFP %in% state & COUNTYFP %in% county)
+          }else{
+            CT <- CT %>% filter(STATEFP %in% state)
+          }
         }
+      }else{
+        ## Set a neighbor buffer to filter a subset down. Using a modified log scale
+        ## to calculate max radius. Scales with distance, with the assumption that 
+        ## rings will expand in distance from center.
+        
+        for(i in 1:neighbor_depth){
+          large_dist <- i*(4+(1*log(i+.001)))
+        }
+        
+        large_buffer <- sf::st_buffer(coords,
+                                      units::set_units((large_dist)*5280,feet))
+        
+        ## Get state from filterAddress / coords, to ease filtering tracts--------
+        ## Note: Filtering by state/county first significantly boosts performance.
+        statefp <- sf::st_filter(geo_states, 
+                                 large_buffer, 
+                                 .predicate = sf::st_intersects)$STATEFP
       }
+    }
+
+    if(geography=="state"){
+      countyfp <- NULL
+    }else{
+      geo_counties <- geo_counties %>% filter(STATEFP %in% statefp)
+      
+      #if(!(geography %in% c("us","state","county")) & !is.null(filterAddress)){
+      if(!(geography %in% c("us","state")) & !is.null(filterAddress)){
+        #Using buffer big to include potential counties for neighbors
+        countyfp <- sf::st_filter(geo_counties, large_buffer, .predicate = sf::st_intersects)
+      }
+    }
+
+    if(!is.null(countyfp)){
+        stfp <- as.character(sf::st_drop_geometry(countyfp$STATEFP))
+        ctfp <- as.character(sf::st_drop_geometry(countyfp$COUNTYFP))
+        ctCT <- CT %>% filter(STATEFP %in% stfp & COUNTYFP %in% ctfp)
+      
       CT <- ctCT
+
     }else if(!is.null(statefp) && geography!="place"){
       CT <- CT %>% filter(STATEFP %in% statefp)
     }else{
+      if(geography!="state"){
       if(suppressWarnings(is.na(as.numeric(place)))){
         CT <- CT %>% filter(NAME %in% place)
       }else{
         CT <- CT %>% filter(PLACEFP %in% place)
       }
+      }
     }
 
     if(verbose==TRUE)message(paste("    -ggr--Filtering tracts took ",round(difftime(Sys.time(),st,units = "sec"),2)))
     st <- Sys.time()
+    
     CT <- CT %>% sf::st_transform('+proj=longlat +datum=WGS84')
+    
     # Preserve master list 
     CTall <- CT
+    
+    ## Filter subset by buffer.
     if(!is.null(filterAddress) | !is.null(coords) | !is.null(filterByGeoType)){
       
-      CT <- sf::st_filter(CT,buffer, .predicate = sf::st_intersects)
-    
+      if(neighbors==FALSE)neighbor_depth <- 1
+      
+      for(i in 1:neighbor_depth){
+        if(i==1){
+          # Get primary set.
+          c <- sf::st_filter(CT,buffer, .predicate = sf::st_intersects)
+          c.buffer <- buffer
+        }else{
+          cl <- CT
+          c.buffer <- sf::st_buffer(sf::st_union(cl),units::set_units(500,feet))
+          c <- sf::st_filter(CTall,c.buffer, .predicate = sf::st_intersects)
+          c <- c %>% filter(!(GEOID %in% cl$GEOID))
+        }
+      
       if(!is.null(filterAddress) | !is.null(filterByGeoType)){
         ## For this section, I want to keep overlap of units that meet a certain
         ## criteria—encoded in the parameter intersectOverlap.
         # Find area of intersection
 
-        CT <- CT %>% mutate(unitArea = 
-                              sf::st_area(geometry))
-
         suppressWarnings( # Fussy about telling me about spatial constants.
-          CT <- CT %>% mutate(intersectedArea = 
-                                sf::st_area(sf::st_intersection(CT,buffer)))
+          c <- c %>% mutate(
+            neighbor_depth = i,
+            unitArea = sf::st_area(geometry),
+            intersectedArea = sf::st_area(sf::st_intersection(c,c.buffer)),
+            intersectionProp = as.numeric(intersectedArea/unitArea))
         )
-
-        CT <- CT %>% mutate(intersectionProp = 
-                              as.numeric(intersectedArea/unitArea))
+      }
   
         if(verbose==TRUE)message(paste("    -ggr--Mutating intersect overlap took ",round(difftime(Sys.time(),st,units = "sec"),2)))
         
         st <- Sys.time()
         
+        
         # Filter by minimum overlap, but account for instances when census tract
         # is very large, beyond the radius, or when all overlaps are small, below
         # the threshhold.
-        if(nrow(CT)>1){
-          CTfilt <- CT %>% filter(intersectionProp>=intersectOverlap)
-          if(nrow(CTfilt)>0){
-            CT <- CTfilt
+        ## Currently, disable for neighbor_depth, as we want to create ring of 
+        ## tracts/block_groups, etc.
+        if(i==1){
+          if(nrow(c)>1){
+            c.filt <- c %>% filter(intersectionProp>=intersectOverlap)
+            if(nrow(c.filt)>0){
+              c <- c.filt
+            }
           }
         }
         
-        if(verbose==TRUE)message(paste("    -ggr--Filtering minimum overlap took ",round(difftime(Sys.time(),st,units = "sec"),2)))
-          
-        # Get neighbors
-        if(neighbors==TRUE){ 
-          buffer2 <- sf::st_buffer(sf::st_union(CT),units::set_units(500,feet))
-          CT2 <- sf::st_filter(CTall,buffer2, .predicate = sf::st_intersects)
-          CT2 <- CT2 %>% filter(!(GEOID %in% CT$GEOID))
-          
-          if(verbose==TRUE)message(paste("    -ggr--Getting neighbors took ",round(difftime(Sys.time(),st,units = "sec"),2)))
-          
-          CT <- CT %>% mutate(neighbor_level = 1)
-          CT2 <- CT2 %>% mutate(neighbor_level = 2)
+        if(i>1){
+          CT <- rbind(cl,c)
+        }else{
+          CT <- c
         }
+
+        if(verbose==TRUE)message(paste("    -ggr--Filtering minimum overlap took ",round(difftime(Sys.time(),st,units = "sec"),2)))
+        
       }
     }else{
       CT <- CT %>% mutate(unitArea = sf::st_area(geometry))
@@ -1428,11 +1479,22 @@ get_geocode_radius <- function(filterAddress=NULL,
     CTng <- sf::st_drop_geometry(CT)
     states <- unique(CTng$STATEFP)
     if(geography!="state"){
+      states <- unique(CTng$STATEFP)
       counties <- unique(CTng$COUNTYFP)
+      if(geography=="county"){
+        state_county_group = data.frame(STATEFP=NULL,COUNTYFP=NULL)
+        for(i in 1:length(states)){
+          state_county_group = rbind(state_county_group,data.frame(STATEFP=states[i],
+                                          COUNTYFP=paste(CTng[CTng$STATEFP==states[i],"COUNTYFP"],collapse=",")))
+        }
+      }else{
+        state_county_group = unique(CTng[c("STATEFP","COUNTYFP")])
+      }
     }else{
+      state_county_group = data.frame(STATEFP=unique(CTng[c("STATEFP")]))
       counties <- NULL
     }
-    
+
     if(geography=="state"){
       geonames <- list(geoid = CT$GEOID,
                           geo_name = CT$NAME)
@@ -1441,39 +1503,47 @@ get_geocode_radius <- function(filterAddress=NULL,
                           geo_name = CT$NAMELSAD)
     }
     
+    ## Return Data ---------------
     if(fipsOnly==TRUE){
       df <- list(
         geoid = CT$GEOID,
         states = states,
         counties = counties,
-        geo_names = geonames
+        geo_names = geonames,
+        state_county_group = state_county_group,
+        neighbor_depth = neighbor_depth,
+        neighbor_depth_list = CT$neighbor_depth
       )
-      if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
+      #if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
       if(geography=="tract"){
         df <- append(df,list(tracts = CT$TRACTCE))
-        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE))
+      #  if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE))
       }else if(geography=="block group"){
         df <- append(df,list(tracts = CT$TRACTCE,block_groups = CT$BLKGRPCE))
-        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE,
-                                                block_groups.neighbors = CT2$BLKGRPCE))
+      #  if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE,
+       #                                         block_groups.neighbors = CT2$BLKGRPCE))
       }else if (geography=="place"){
         df <- append(df,list(places = CT$PLACEFP))
       }else{
         #df <- append(df,list(geoid = CT$GEOID))
       }
     }else if(profile==TRUE){
-      df <- list(geoid = CT$GEOID,
+      df <- list(df = CT,
+                 geoid = CT$GEOID,
                  states = states,
                  counties = counties,
-                 geo_names = geonames)
-      if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
+                 state_county_group = state_county_group,
+                 geo_names = geonames,
+                 neighbor_depth = neighbor_depth,
+                 neighbor_depth_list = CT$neighbor_depth)
+      #if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
       if(geography=="tract"){
         df <- append(df,list(tracts = CT$TRACTCE))
-        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE))
+       # if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE))
       }else if(geography=="block group"){
         df <- append(df,list(tracts = CT$TRACTCE,block_groups = CT$BLKGRPCE))
-        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE,
-                                                block_groups.neighbors = CT2$BLKGRPCE))
+      #  if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE,
+      #                                          block_groups.neighbors = CT2$BLKGRPCE))
       }else if (geography=="place"){
         df <- append(df,list(places = CT$PLACEFP))
       }else{
@@ -1485,8 +1555,11 @@ get_geocode_radius <- function(filterAddress=NULL,
                  geoid = CT$GEOID,
                  states = states,
                  counties = counties,
+                 state_county_group = state_county_group,
                  geo_names = geonames,
-                 coordinates = coords)  
+                 coordinates = coords,
+                 neighbor_depth = neighbor_depth,
+                 neighbor_depth_list = CT$neighbor_depth)  
       if(geography=="place"){
         df <- append(df,list(places = CT$PLACEFP))
       }
@@ -1495,27 +1568,30 @@ get_geocode_radius <- function(filterAddress=NULL,
                  geoid = CT$GEOID,
                  states = states,
                  counties = counties,
+                 state_county_group=state_county_group,
                  geo_names = geonames,
-                 coordinates = coords)
-      if(neighbors==TRUE)df <- append(df,list(df.neighbors = CT2))
+                 coordinates = coords,
+                 buffer = buffer,
+                 neighbor_depth = neighbor_depth,
+                 neighbor_depth_list = CT$neighbor_depth)
+     # if(neighbors==TRUE)df <- append(df,list(df.neighbors = CT2))
       if(geography=="tract"){
         df <- append(df,list(tracts = CT$TRACTCE))
-        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE))
+     #   if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE))
       }else if(geography=="block group"){
         df <- append(df,list(tracts = CT$TRACTCE,block_groups = CT$BLKGRPCE))
-        if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE,
-                                                block_groups.neighbors = CT2$BLKGRPCE))
+        # if(neighbors==TRUE)df <- append(df,list(tracts.neighbors = CT2$TRACTCE,
+        #                                         block_groups.neighbors = CT2$BLKGRPCE))
       }
       if(geography=="place"){
         df <- append(df,list(places = CT$PLACEFP))
       }
       if(!is.null(filterAddress))df <- append(df,list(buffer = buffer))
-      if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
+    #  if(neighbors==TRUE)df <- append(df,list(geoid.neighbors = CT2$GEOID))
     }
     
     if(verbose==TRUE)message(paste("    -ggr--Df construction took ",round(difftime(Sys.time(),st,units = "sec"),2)))
     st <- Sys.time()
-    
     return(df)
     
   }

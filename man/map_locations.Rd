@@ -22,6 +22,8 @@ map_locations(
 \arguments{
 \item{addressList}{Either a vector with addresses listed, or a dataframe needing formatting.}
 
+\item{secondaryAddressList}{A comparison set of addresses to plot.}
+
 \item{state}{Parameter to filter by state.}
 
 \item{county}{Parameter to filter by county.}

@@ -8,7 +8,7 @@ Imports: httr,tidyr,dplyr, sf, stringr, tigris, units, tmap, tmaptools,officer,f
 Depends: R (>= 3.5.0)
 Description: Package censusprofiler is designed to simplify regionalized census data capture. While censusprofiler can perform several functions, at its core, it takes a geographic point, draws a radius, and makes calls to the census api for geographical units around within that radius, and provides output that is more suited for presentation. All census calls are made via the US Census API. This package was designed to interface with the American Community Survey in mind. However, the US Census API provides multiple datasets. Implementation of these additional data sources remains a TODO for the package.
 License: GPL (>= 2)
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
 Encoding: UTF-8
 Collate: 
     'capi.R'

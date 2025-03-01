@@ -41,6 +41,8 @@
 #'   map.
 #' @param areaOnly To display the tracts/counties/states within the area
 #'   specified by geography.
+#' @param neighbors Logical parameter to specify whether neighboring geos should be called.
+#' @param neighbor_depth Integer value of depth of neighbor rings.
 #' @param alpha Set alpha value of map.
 #' @param interactive Parameter for setting tmap_mode to either `interactive` or
 #'   `plot.`
@@ -121,6 +123,8 @@ mapper <- function(mapDF=NULL,
                    MapTitle=NULL,
                    radiusOnly=FALSE,
                    areaOnly=FALSE,
+                   neighbors=FALSE,
+                   neighbor_depth=1,
                    alpha=0.5,
                    interactive=FALSE,
                    geosObject=NULL, 
@@ -170,7 +174,7 @@ mapper <- function(mapDF=NULL,
     warning("!> This appears to be an areaOnly==TRUE call. Automatically adjusted.")
   }
   
-  if(is.null(dataset_main)){
+  if(is.null(mapDF) & is.null(dataset_main) & (!is.null(tableID) | !is.null(variable))){
     stop("!> You must provide a dataset. Options are `acs` and subsidiaries.")
   }
 
@@ -219,7 +223,7 @@ mapper <- function(mapDF=NULL,
 
   ## Get census variables
   if(verbose==TRUE)message("Getting CV...")
-  if(is.null(censusVars)){ 
+  if(is.null(censusVars) & is.null(mapDF) & (!is.null(tableID) | !is.null(variable))){ 
     CV <- get_census_variables(year=year, dataset_main = dataset_main, dataset_sub = dataset_sub, dataset_last = dataset_last)
   }else{
     CV <- censusVars
@@ -243,6 +247,9 @@ mapper <- function(mapDF=NULL,
                                   geography = geography,
                                   coords = mapDF$info$coordinates,
                                   geosObject = geosObject,
+                                  radiusOnly = radiusOnly,
+                                  neighbors = neighbors,
+                                  neighbor_depth = neighbor_depth,
                                   verbose = verbose)
       }
       mapDF <- mapDF$data$type1data
@@ -267,6 +274,12 @@ mapper <- function(mapDF=NULL,
                                               censusVars = CV,
                                               verbose = verbose)
       }
+    }else{
+      if(areaOnly==FALSE){
+        if(verbose==TRUE)message("- mapper | Filtering by tableID...")
+        if(!is.null(tableID))
+          mapDF <- mapDF[mapDF$table_id==tableID,]
+      }
     }
   }else if(!is.null(filterAddress) | !is.null(coords)){
     if(verbose==TRUE)message("- mapper | No mapDF. Processing filterAddress or coords...")
@@ -274,6 +287,9 @@ mapper <- function(mapDF=NULL,
                               filterRadius=filterRadius,
                               geography = geography,
                               coords = coords,
+                              radiusOnly = radiusOnly,
+                              neighbors = neighbors,
+                              neighbor_depth = neighbor_depth,
                               geosObject = geosObject,
                               verbose = verbose)
   }else if(!is.null(state) | !is.null(county)){
@@ -284,6 +300,8 @@ mapper <- function(mapDF=NULL,
                               county=county,
                               geography = geography,
                               coords = coords,
+                              neighbors = neighbors,
+                              neighbor_depth = neighbor_depth,
                               geosObject = geosObject,
                               verbose = verbose)
   }else if(!is.null(geoidLookup)){
@@ -294,7 +312,10 @@ mapper <- function(mapDF=NULL,
                               county=NULL,
                               geoidLookup=geoidLookup,
                               geography = geography,
+                              radiusOnly = radiusOnly,
                               coords = coords,
+                              neighbors = neighbors,
+                              neighbor_depth = neighbor_depth,
                               geosObject = geosObject,
                               verbose = verbose)
 
@@ -338,7 +359,7 @@ mapper <- function(mapDF=NULL,
                             county=county,
                             geosObject = geosObject,
                             verbose=verbose)
-    
+
     ## See if mapDF is fully-formed with ggr. If not, append ggr.
     if(!("df" %in% names(mapDF))){
       ggr <- append(ggr,list(df = mapDF))
@@ -346,7 +367,9 @@ mapper <- function(mapDF=NULL,
   }else{
     ## If our mapDF is for an areaOnly or radiusOnly call, use the supplied
     ## ggr$df object, rather than mapDF.
-    if(!is.null(ggr$df)){
+    if((radiusOnly==TRUE | areaOnly==TRUE) & !is.null(ggr)){
+      mapDF <- ggr
+    }else if(!is.null(ggr$df)){
       if(verbose==TRUE)message("- mapper | Using ggr$df...")
       mapDF <- ggr$df
     }else{
@@ -389,19 +412,21 @@ mapper <- function(mapDF=NULL,
   }else{
     ## If we are passing only filter address, etc. but no mapDF, use ggr object.
     ## Otherwise, use mapDF.
-    if(is.null(mapDF)){
-      mapDF <- ggr$df
-      #mapDF <- mapDF %>% mutate(name_clean = GEOID)
-      mapDF <- mapDF %>% mutate(name_clean = NAMELSAD)
-    }else{
+    # if(radiusOnly==TRUE){
+    #   mapDF <- ggr$buffer
+    # }else if(areaOnly==TRUE){
+    #   mapDF <- ggr$buffer
+    # }else{
       #md <- sf::st_drop_geometry(mapDF)
+      mapDF <- mapDF$df
+      buffer <- mapDF$buffer
       mapDF <- mapDF %>% mutate(name_clean = NAMELSAD)
       # for(i in 1:nrow(md)){
       #   #mapDF <- mapDF %>% mutate(name_clean = GEOID)
       #   mapDF[i,'name_clean'] <- (unlist(stringr::str_split(md[i,'name'],";"))[1])
       #   
       # }
-    }
+    # }
   }
 
   if(verbose==TRUE)message(" - mapper | Preparing centroids...")

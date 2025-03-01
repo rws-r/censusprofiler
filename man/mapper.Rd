@@ -23,6 +23,8 @@ mapper(
   MapTitle = NULL,
   radiusOnly = FALSE,
   areaOnly = FALSE,
+  neighbors = FALSE,
+  neighbor_depth = 1,
   alpha = 0.5,
   interactive = FALSE,
   geosObject = NULL,
@@ -85,6 +87,10 @@ map.}
 
 \item{areaOnly}{To display the tracts/counties/states within the area
 specified by geography.}
+
+\item{neighbors}{Logical parameter to specify whether neighboring geos should be called.}
+
+\item{neighbor_depth}{Integer value of depth of neighbor rings.}
 
 \item{alpha}{Set alpha value of map.}
 
