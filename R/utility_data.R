@@ -846,6 +846,7 @@ load_data <- function(load_censusVars = FALSE,
                                 tableID = tableID, 
                                 geosObject = geosObject,
                                 test=TRUE,
+                                censusVars = CV,
                                 verbose = verbose)
     
     u <- create_comparison_data(geography="us",
@@ -1384,17 +1385,25 @@ segregationMeasures <- function(data=NULL,
   
   ## Data Cleaning and preparation
   if(verbose==TRUE)message("segregationMeasures() | Cleaning data...")
+  
+  tableNames <- c("table_id","variable","year","concept","labels","estimate","subtotal","pct","geoid","geography","type")
+  if("state" %in% names(data))
+    tableNames <- c(tableNames,"state")
+  if("county" %in% names(data))
+    tableNames <- c(tableNames,"county")
+
   if(dataFormat!="vector"){
     if(type_data(data)==2){
       data <- data %>% ungroup()
-      data <- data[c("table_id","variable","year","concept","labels","estimate","subtotal","pct","name","geoid","geography","type")]
+      data <- data[tableNames]
     }else{
       if(inherits(data,"sf")==TRUE){
         sfdata <- data
         data <- sf::st_drop_geometry(data)
       }
       data <- data %>% ungroup()
-      data <- data[c("table_id","variable","year","concept","labels","estimate","subtotal","pct","name","type")]
+      tableNames <- tableNames %>% dplyr::select(-"geography")
+      data <- data[tableNames]
     }
     data <- data %>% filter(table_id==tableID)
     
@@ -1418,8 +1427,11 @@ segregationMeasures <- function(data=NULL,
   # Combine populations
   
   if(verbose==TRUE)message("segregationMeasures() | Running spatialHelper()...")
-  data <- spatial_helper(data,geography=geography,
+  data <- spatial_helper(data,
+                         geography=geography,
                          geosObject = geosObject,
+                         county = county,
+                         state = state,
                          verbose = verbose)
   
   
@@ -2250,6 +2262,14 @@ stat_table_builder <- function(year=NULL,
   CV.VARS <- CV[[1]]
   CV.GROUPS <- CV[[2]]
   
+  if(length(variables)>1)
+    vs <- variables[1]
+  else
+    vs <- 1
+  
+  #variables <- variable_builder(censusVars = CV, tableID = tableID,varStartNum = vs,varEndNum = variables[length(variables)])
+  #variables <- variables$allVars
+  
   if(compiler==TRUE){
     relPath <- "data/statfiles/"
     message("Setting file path...")
@@ -2388,6 +2408,16 @@ stat_table_builder <- function(year=NULL,
       }
     }
     
+    ## Clean up variables for use.
+    preflight_check <- tableID_variable_preflight(tableID = tableID,
+                                                  variables = variables,
+                                                  censusVars = CV,
+                                                  return = "all",
+                                                  verbose = verbose)
+    
+    tableID <- preflight_check$table_id
+    variables <- preflight_check$tableID.join$variable
+    
     ## Logics for returning a summary table of dataframe.
     if(summary_table==TRUE){
       if(is.null(data)){
@@ -2397,7 +2427,7 @@ stat_table_builder <- function(year=NULL,
       if(verbose==TRUE)message(paste("Calculating summary_table. This may take a while. Processing ",nrow(data)," rows, and ",length(vars)," variables.",sep=""))
       st <- Sys.time()
       z <- NULL
-      
+
       for(i in 1:length(vars)){
         if(verbose==TRUE)message(paste(dur(st),"Iteration ",i),sep="")
         sti <- Sys.time()
@@ -2405,6 +2435,7 @@ stat_table_builder <- function(year=NULL,
         #subdf = data %>% filter(variable==vars[i])
         subdf <- data[data$variable==vars[i],]
         if(verbose==TRUE)message(paste(dur(st),"Performing calculations...",sep=""))
+      
         
         if(verbose==TRUE)message(paste(dur(st),"...calculating sd_pct",sep=""))
         sd_pct <- sd(subdf$pct_by_type,na.rm=TRUE)
@@ -2533,6 +2564,7 @@ tableID_variable_preflight <- function(tableID = NULL,
   
   ## Check to make sure tableID exists in supplied censusVars directory.
   if(!is.null(tableID)){
+    if(verbose==TRUE)message("---tableID_variable_preflight checking tableID")
     bumlist <- c()
     ifelse("table_id" %in% names(censusVars$variables),
                         directory <- censusVars$variables$table_id,
@@ -2558,11 +2590,18 @@ tableID_variable_preflight <- function(tableID = NULL,
   }
   
   if(!is.null(variables)){
+    if(verbose==TRUE)message("---tableID_variable_preflight checking variables...")
+    if(length(variables)>1e4){
+      message(paste0("---tableID_variable_preflight >> Heads up, this is a big list. We've got ",length(variables)," rows. Buckle up."))
+    }
+    if(verbose==TRUE)message("---tableID_variable_preflight checking variables...")
     ## Figure out what kind of variable input we're dealing with. If numeric alone
     ## is supplied, with single tableID, then format. 
     vartypelist <- c()
     newvars <- c()
+    if(verbose==TRUE)pb <- txtProgressBar(min=0,max=length(variables),style=3)
     for(i in 1:length(variables)){
+      if(verbose==TRUE)setTxtProgressBar(pb,i)
       v <- variable_typer(variables[i])
       vartypelist <- c(vartypelist,v)
       if(v=="D" & !is.null(tableID) & length(tableID==1)){
@@ -2572,6 +2611,7 @@ tableID_variable_preflight <- function(tableID = NULL,
         newvars <- c(newvars,variables[i])
       }
     }
+    if(verbose==TRUE)close(pb)
     variables <- newvars
 
     # Extract tableID if not supplied, as long as we have variables w/ prefix
@@ -2582,6 +2622,7 @@ tableID_variable_preflight <- function(tableID = NULL,
     }
     
     # Create join table
+    if(verbose==TRUE)message("---tableID_variable_preflight joining tables...")
     tableID.join <- data.frame(table_id=tableID,variable=variables)
     
     # Get list of unique tableIDs
@@ -2658,7 +2699,7 @@ theme_censusprofiler <- function(x,...){
   thin_b <- fp_border(width = .5,
                       color = "#111111")
   x <- border_remove(x)
-  x <- font(x, fontname = "Open Sans", part = "all")
+ # x <- font(x, fontname = "Open Sans", part = "all")
   x <- fontsize(x, size = 9.5, part = "all")
   x <- color(x, color = "#EEEEEE", part="header")
   x <- bg(x , bg="#002242",part="header")

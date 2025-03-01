@@ -17,6 +17,8 @@
 #'   of tracts, block_groups or other geography from. Options are currently
 #'   "metro", "place","combined_statistical_areas". E.g., Find all tracts in Chicago (place).
 #' @param filterByGeoValue A value to find object for filtering. Either NAME or GEOID. 
+#' @param neighbors Logical parameter to specify whether to get neighboring tracts around selected area.
+#' @param neighbor_depth To specify the ring depth of neighboring geos to capture.
 #' @param filterSummary Logical parameter to specify whether to filter out summary levels (typically _001 and therefore "root").
 #' @param filterSummaryLevels Explicit description of lowest type denoting summary level. Also excludes lower levels.#' @param state Input (abb. or FIPS) of state for search.
 #' @param state Input (abb. or FIPS) of state for search.
@@ -54,6 +56,8 @@ profiler <- function(name=NULL,
                      coords=NULL,
                      filterByGeoType=NULL,
                      filterByGeoValue=NULL,
+                     neighbors=FALSE,
+                     neighbor_depth=1,
                      filterSummary=FALSE,
                      filterSummaryLevels="root",
                      state=NULL,
@@ -70,7 +74,6 @@ profiler <- function(name=NULL,
                      verbose=FALSE,
                      st=NULL){
   
-
 # Internal functions ------------------------------------------------------
 
   if(is.null(st)){
@@ -120,6 +123,8 @@ profiler <- function(name=NULL,
                                   geography = geography,
                                   year = year,
                                   profile = TRUE,
+                                  neighbors = neighbors,
+                                  neighbor_depth = neighbor_depth,
                                   geosObject = geosObject,
                                   verbose = verbose)
       }
@@ -132,6 +137,8 @@ profiler <- function(name=NULL,
                                   state = state,
                                   year = year,
                                   profile = TRUE,
+                                  neighbors = neighbors,
+                                  neighbor_depth = neighbor_depth,
                                   geosObject = geosObject,
                                   verbose = verbose)
       }
@@ -188,6 +195,8 @@ profiler <- function(name=NULL,
                  coords=coords,
                  filterByGeoType = filterByGeoType,
                  filterByGeoValue = filterByGeoValue,
+                 neighbors = neighbors,
+                 neighbor_depth = neighbor_depth,
                  filterSummaryLevels=filterSummaryLevels,
                  ggr=ggr,
                  state=state,
@@ -217,7 +226,8 @@ profiler <- function(name=NULL,
                    buffer = ggr$buffer,
                    geoid = ggr$geoid,
                    states = ggr$states,
-                   counties = ggr$counties)
+                   counties = ggr$counties,
+                   df=ggr$df)
       if(geography=="tract"){
         info <- append(info,list(tracts = ggr$tracts))
       }

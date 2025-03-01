@@ -140,6 +140,34 @@ test_that("capi() works", {
                        profile=FALSE,
                        st=NULL),"data.frame")
   
+  neighbors <- capi(year=year,
+                    dataset_main="acs",
+                    dataset_sub="acs5",
+                    dataset_last=NULL,
+                    censusVars=CV, 
+                    tableID="B01001",   
+                    variables=c("B01001_001","B01001_002"),
+                    geography="tract",
+                    filterAddress=address,
+                    filterRadius=1,
+                    neighbors=T,
+                    neighbor_depth = 3,
+                    ggr=NULL,
+                    geosObject=geos,
+                    mode="table",  
+                    filterSummary=FALSE,
+                    filterSummaryLevels="root",
+                    state=NULL,
+                    county=NULL,
+                    tract=NULL,
+                    block_group=NULL,
+                    verbose=verbose,
+                    profile=FALSE,
+                    st=NULL)
+  
+  expect_s3_class(neighbors,"data.frame")
+  expect_contains(names(neighbors),"neighbor_depth")
+  
   # Get median call
   expect_s3_class(capi(year=year,
                        dataset_main="acs",

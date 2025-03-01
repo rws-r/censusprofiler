@@ -21,6 +21,7 @@ get_geocode_radius(
   coords = NULL,
   intersectOverlap = 0.1,
   neighbors = FALSE,
+  neighbor_depth = 1,
   year = NULL,
   test = FALSE,
   verbose = FALSE,
@@ -67,6 +68,8 @@ as an object.}
 and unit area.}
 
 \item{neighbors}{Logical parameter to specify whether to get neighboring tracts around selected area.}
+
+\item{neighbor_depth}{To specify the ring depth of neighboring geos to capture.}
 
 \item{year}{Year for data call}
 

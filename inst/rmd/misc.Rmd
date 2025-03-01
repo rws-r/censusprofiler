@@ -1,0 +1,19 @@
+```{r}
+vars <- NULL
+notes <- NULL
+for(i in 1:10){
+  x <- (i/10)-0.1
+  y <- x+0.1
+  
+  notes <- c(notes,paste0(">=",x,"<",y))
+
+  val <- nrow(a.a[a.a$pct_by_type >= x & a.a$pct_by_type < y,])
+  vars <- c(vars,val)
+}
+
+a.b <- data.frame(segment=seq(0.1,1,0.1),
+                  n=vars,
+                  notes=notes)
+
+```
+

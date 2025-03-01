@@ -19,6 +19,8 @@ profiler(
   coords = NULL,
   filterByGeoType = NULL,
   filterByGeoValue = NULL,
+  neighbors = FALSE,
+  neighbor_depth = 1,
   filterSummary = FALSE,
   filterSummaryLevels = "root",
   state = NULL,
@@ -66,6 +68,10 @@ of tracts, block_groups or other geography from. Options are currently
 "metro", "place","combined_statistical_areas". E.g., Find all tracts in Chicago (place).}
 
 \item{filterByGeoValue}{A value to find object for filtering. Either NAME or GEOID.}
+
+\item{neighbors}{Logical parameter to specify whether to get neighboring tracts around selected area.}
+
+\item{neighbor_depth}{To specify the ring depth of neighboring geos to capture.}
 
 \item{filterSummary}{Logical parameter to specify whether to filter out summary levels (typically _001 and therefore "root").}
 
